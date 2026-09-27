@@ -19,8 +19,11 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" driver
+	"modernc.org/sqlite" // also registers the "sqlite" driver
 )
+
+// sqliteBusy is SQLITE_BUSY, the primary result code for a locked database.
+const sqliteBusy = 5
 
 // Statuses an entry can have.
 const (
@@ -101,11 +104,21 @@ func Open(path string, busyTimeout time.Duration) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{db: db}
-	if err := s.migrate(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("open %s: %w", path, err)
+	// Switching a brand-new file to WAL can report SQLITE_BUSY without
+	// consulting the busy handler when several processes create the database
+	// at once, so retry within the same budget busy_timeout would have used.
+	deadline := time.Now().Add(busyTimeout)
+	for {
+		err := s.migrate()
+		if err == nil {
+			return s, nil
+		}
+		if !isBusy(err) || time.Now().After(deadline) {
+			db.Close()
+			return nil, fmt.Errorf("open %s: %w", path, err)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	return s, nil
 }
 
 // migrate creates the schema. It only takes the write lock when the schema is
@@ -118,8 +131,28 @@ func (s *Store) migrate() error {
 	if v >= schemaVersion {
 		return nil
 	}
-	_, err := s.db.Exec(schema)
-	return err
+	// BEGIN IMMEDIATE (see _txlock in DSN) takes the write lock up front, where
+	// busy_timeout applies, and serialises concurrent first opens.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := tx.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+		return err
+	}
+	if v >= schemaVersion {
+		return nil
+	}
+	if _, err := tx.Exec(schema); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	return errors.As(err, &se) && se.Code()&0xff == sqliteBusy
 }
 
 // Close closes the database.
