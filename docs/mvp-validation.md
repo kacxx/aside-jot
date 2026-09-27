@@ -152,3 +152,14 @@ On the ordinary-prompt path, jot adds about 2 ms over a bare process start.
 `strace -f -e trace=execve,openat` on that path shows no `git` exec and no
 database file opened. With an unwritable `$JOT_DB`, an ordinary prompt still
 produces no output and creates nothing.
+
+## Found after import
+
+A later `-race` run of `TestConcurrentWriterPools` failed 2 times in 30. When
+several processes open a database file that doesn't exist yet, switching it to
+WAL can return `SQLITE_BUSY` immediately, without calling the busy handler. The
+failure was safe: the hook still blocked the jot and reported "NOT saved". It
+could only happen the first time the database file was created. Fixed after the
+import: `Open` retries within the busy-timeout budget, and the schema is created
+under `BEGIN IMMEDIATE`. `TestConcurrentFirstOpen` covers it and failed 4 of 5
+runs without the fix.
