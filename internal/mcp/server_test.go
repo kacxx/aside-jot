@@ -143,7 +143,7 @@ func TestUnknownProtocolVersionFallsBack(t *testing.T) {
 	if err := NewServer(nil, "t").Serve(context.Background(), strings.NewReader(in), &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), LatestProtocolVersion) {
-		t.Fatal(out.String())
+	if !strings.Contains(out.String(), `"protocolVersion":"2025-11-25"`) {
+		t.Fatalf("unknown versions must be counter-offered the newest supported one: %s", out.String())
 	}
 }
