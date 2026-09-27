@@ -1,0 +1,14 @@
+{
+  "conversation_id": "71c3e8b2-9f0a-4d6e-b5a7-2e8c1f4d0b93",
+  "generation_id": "d62f0b3a-8e17-4c9d-a054-1b7e3c9f2a68",
+  "model": "gpt-5",
+  "hook_event_name": "beforeSubmitPrompt",
+  "cursor_version": "1.7.52",
+  "workspace_roots": ["/Users/dev/src/webapp", "/Users/dev/src/shared-lib"],
+  "user_email": null,
+  "transcript_path": null,
+  "prompt": ">> shared-lib version bump needs a changelog entry",
+  "attachments": [
+    {"type": "rule", "file_path": "/Users/dev/src/webapp/.cursor/rules/go.mdc"}
+  ]
+}

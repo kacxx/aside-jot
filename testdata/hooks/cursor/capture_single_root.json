@@ -1,0 +1,12 @@
+{
+  "conversation_id": "e5b0a1c7-3d2f-4c8e-9a14-7f6d2b0c8e31",
+  "generation_id": "4a9d1e06-b27c-4f85-a3e0-5c18d7f2b940",
+  "model": "claude-sonnet-4.5",
+  "hook_event_name": "beforeSubmitPrompt",
+  "cursor_version": "1.7.52",
+  "workspace_roots": ["/Users/dev/src/webapp"],
+  "user_email": "dev@example.com",
+  "transcript_path": null,
+  "prompt": ">> orders pagination should probably be cursor-based, not offset",
+  "attachments": []
+}

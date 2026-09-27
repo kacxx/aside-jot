@@ -1,0 +1,9 @@
+{
+  "session_id": "3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47",
+  "prompt_id": "9d4e7c21-0a6b-4f3e-b1d8-72c5a0e9f613",
+  "transcript_path": "/Users/dev/.claude/projects/-Users-dev-src-webapp/3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47.jsonl",
+  "cwd": "/Users/dev/src/webapp",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": ">> token cache TTL looks too long, check with infra before shipping"
+}

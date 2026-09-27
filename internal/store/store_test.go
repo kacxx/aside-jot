@@ -1,0 +1,222 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+func openTemp(t *testing.T) (*Store, string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "sub dir", "jot.db")
+	s, err := Open(path, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s, path
+}
+
+func TestCRUD(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+
+	e := Entry{
+		Text: "first", Source: "claude", SessionID: "sess", Cwd: "/w",
+		RepoRoot: "/w", RepoName: "w", Branch: "main", CommitSHA: "abc1234",
+		Metadata: json.RawMessage(`{"k":"v"}`),
+	}
+	id, err := s.Insert(ctx, &e)
+	if err != nil || id != 1 {
+		t.Fatalf("insert: id=%d err=%v", id, err)
+	}
+	if _, err := s.Insert(ctx, &Entry{Text: "second"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Get(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Text != "first" || got.Status != StatusInbox || got.Branch != "main" ||
+		got.CommitSHA != "abc1234" || string(got.Metadata) != `{"k":"v"}` ||
+		got.CreatedAt.IsZero() {
+		t.Fatalf("get: %+v", got)
+	}
+	if _, err := s.Get(ctx, 99); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("get missing: %v", err)
+	}
+
+	list, err := s.List(ctx, StatusInbox, 10)
+	if err != nil || len(list) != 2 || list[0].ID != 2 {
+		t.Fatalf("list newest first: %v %+v", err, list)
+	}
+	if list, _ := s.List(ctx, StatusInbox, 1); len(list) != 1 {
+		t.Fatalf("limit: %d", len(list))
+	}
+
+	if err := s.SetStatus(ctx, 1, StatusDone); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetStatus(ctx, 42, StatusDone); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("done missing: %v", err)
+	}
+	list, _ = s.List(ctx, StatusInbox, 0)
+	if len(list) != 1 || list[0].ID != 2 {
+		t.Fatalf("inbox after done: %+v", list)
+	}
+	all, _ := s.List(ctx, "", 0)
+	if len(all) != 2 {
+		t.Fatalf("all: %d", len(all))
+	}
+}
+
+func TestBadMetadataRejected(t *testing.T) {
+	s, _ := openTemp(t)
+	if _, err := s.Insert(context.Background(), &Entry{Text: "x", Metadata: json.RawMessage(`{nope`)}); err == nil {
+		t.Fatal("expected invalid JSON metadata to be rejected")
+	}
+}
+
+func TestSearchEscapesWildcards(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	for _, txt := range []string{"100% done", "100x done", "a_b", "axb", `back\slash`, "Case Test"} {
+		if _, err := s.Insert(ctx, &Entry{Text: txt}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := map[string][]string{
+		"100%": {"100% done"},
+		"a_b":  {"a_b"},
+		`k\s`:  {`back\slash`},
+		"case": {"Case Test"},
+		"done": {"100x done", "100% done"},
+		"%":    {"100% done"},
+		"_":    {"a_b"},
+		"zzz":  nil,
+	}
+	for q, want := range cases {
+		got, err := s.Search(ctx, q, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var texts []string
+		for _, e := range got {
+			texts = append(texts, e.Text)
+		}
+		if fmt.Sprint(texts) != fmt.Sprint(want) {
+			t.Errorf("Search(%q) = %q, want %q", q, texts, want)
+		}
+	}
+}
+
+func TestWALEnabled(t *testing.T) {
+	s, path := openTemp(t)
+	var mode string
+	if err := s.DB().QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
+		t.Fatal(err)
+	}
+	if mode != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", mode)
+	}
+	var busy int
+	if err := s.DB().QueryRow("PRAGMA busy_timeout").Scan(&busy); err != nil {
+		t.Fatal(err)
+	}
+	if busy != 2000 {
+		t.Fatalf("busy_timeout = %d, want 2000", busy)
+	}
+	if _, err := s.Insert(context.Background(), &Entry{Text: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path + "-wal"); err != nil {
+		t.Fatalf("expected WAL file: %v", err)
+	}
+}
+
+// TestConcurrentWriterPools simulates several hook processes capturing at once:
+// each goroutine has its own pool, as a separate process would.
+func TestConcurrentWriterPools(t *testing.T) {
+	const pools, perPool = 8, 50
+	path := filepath.Join(t.TempDir(), "jot.db")
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, pools*perPool)
+	for p := 0; p < pools; p++ {
+		wg.Add(1)
+		go func(p int) {
+			defer wg.Done()
+			s, err := Open(path, 5*time.Second)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer s.Close()
+			for i := 0; i < perPool; i++ {
+				if _, err := s.Insert(ctx, &Entry{Text: fmt.Sprintf("p%d-%d", p, i)}); err != nil {
+					errs <- err
+				}
+			}
+		}(p)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+
+	s, err := Open(path, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var n, distinct int
+	if err := s.DB().QueryRow("SELECT count(*), count(DISTINCT text) FROM entries").Scan(&n, &distinct); err != nil {
+		t.Fatal(err)
+	}
+	if n != pools*perPool || distinct != n {
+		t.Fatalf("rows = %d distinct = %d, want %d", n, distinct, pools*perPool)
+	}
+}
+
+func TestBackup(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	for i := 0; i < 3; i++ {
+		if _, err := s.Insert(ctx, &Entry{Text: fmt.Sprint("e", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dst := filepath.Join(t.TempDir(), "backup.db")
+	if err := s.Backup(ctx, dst); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(dst, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	list, err := b.List(ctx, "", 0)
+	if err != nil || len(list) != 3 {
+		t.Fatalf("backup contents: %v %d", err, len(list))
+	}
+
+	before, _ := os.ReadFile(dst)
+	err = s.Backup(ctx, dst)
+	if err == nil || !strings.Contains(err.Error(), "refusing to overwrite") {
+		t.Fatalf("second backup: %v", err)
+	}
+	after, _ := os.ReadFile(dst)
+	if string(before) != string(after) {
+		t.Fatal("backup file was modified")
+	}
+}
