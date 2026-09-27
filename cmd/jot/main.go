@@ -40,7 +40,7 @@ Usage:
 Environment:
   JOT_DB                   database path (default: $XDG_DATA_HOME/jot/jot.db,
                            else the OS per-user data directory)
-  JOT_BUSY_TIMEOUT_MS      how long to wait on a locked database (default 2000)
+  JOT_BUSY_TIMEOUT_MS      how long each database step waits on a lock (default 2000)
 `
 
 func main() {

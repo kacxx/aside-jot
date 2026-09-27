@@ -3,6 +3,12 @@
 // Every connection is opened with busy_timeout and WAL set in the DSN, so
 // concurrent hook processes queue on the write lock instead of failing
 // immediately. Each capture is a single autocommit INSERT.
+//
+// busy_timeout is not the whole story for a brand-new file: switching it to
+// WAL can return SQLITE_BUSY without consulting the busy handler when several
+// processes create the database at once. Open therefore retries, bounding every
+// attempt by what is left of the busy timeout. Open any database through Open,
+// or that race comes back.
 package store
 
 import (
@@ -19,8 +25,17 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" driver
+	"modernc.org/sqlite" // also registers the "sqlite" driver
 )
+
+// sqliteBusy is SQLITE_BUSY, the primary result code for a locked database.
+const sqliteBusy = 5
+
+// openRetryInterval is the pause between Open attempts that failed with
+// SQLITE_BUSY. Short, because those failures are quick and the busy-timeout
+// budget is usually a couple of seconds; attempts are bounded by what is left
+// of that budget either way.
+const openRetryInterval = 10 * time.Millisecond
 
 // Statuses an entry can have.
 const (
@@ -89,37 +104,89 @@ func DSN(path string, busyTimeout time.Duration) string {
 	return u.String() + "?" + q.Encode()
 }
 
-// Open opens (creating if needed) the database at path.
+// Open opens (creating if needed) the database at path. It waits at most
+// busyTimeout for a locked database, including while creating it.
 func Open(path string, busyTimeout time.Duration) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("create data dir: %w", err)
 		}
 	}
+	// Each attempt gets its own handle whose busy_timeout is what is left of
+	// the budget, so neither the connect-time WAL switch nor BEGIN IMMEDIATE
+	// can wait past the deadline.
+	deadline := time.Now().Add(busyTimeout)
+	for {
+		err := openAttempt(path, max(time.Until(deadline), 0))
+		if err == nil {
+			break
+		}
+		remaining := time.Until(deadline)
+		if !isBusy(err) || remaining <= 0 {
+			return nil, fmt.Errorf("open %s: %w", path, err)
+		}
+		time.Sleep(min(openRetryInterval, remaining))
+	}
+	// The file is now WAL with the current schema, so the pragmas in the DSN
+	// no longer need a lock.
 	db, err := sql.Open("sqlite", DSN(path, busyTimeout))
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db}
-	if err := s.migrate(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("open %s: %w", path, err)
+	return &Store{db: db}, nil
+}
+
+// openAttempt makes one attempt at preparing the database; a variable so tests
+// can simulate the WAL-switch race.
+var openAttempt = migrateWithTimeout
+
+// migrateWithTimeout connects with the given busy timeout and ensures the
+// schema exists.
+func migrateWithTimeout(path string, busyTimeout time.Duration) error {
+	db, err := sql.Open("sqlite", DSN(path, busyTimeout))
+	if err != nil {
+		return err
 	}
-	return s, nil
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	return migrate(db)
 }
 
 // migrate creates the schema. It only takes the write lock when the schema is
 // missing, so opening an existing database is read-only.
-func (s *Store) migrate() error {
-	var v int
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
+func migrate(db *sql.DB) error {
+	if v, err := userVersion(db); err != nil || v >= schemaVersion {
 		return err
 	}
-	if v >= schemaVersion {
-		return nil
+	// BEGIN IMMEDIATE (see _txlock in DSN) takes the write lock up front, where
+	// busy_timeout applies, and serialises concurrent first opens. Re-check the
+	// version under the lock in case another process migrated meanwhile.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
 	}
-	_, err := s.db.Exec(schema)
-	return err
+	defer tx.Rollback()
+	if v, err := userVersion(tx); err != nil || v >= schemaVersion {
+		return err
+	}
+	if _, err := tx.Exec(schema); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// userVersion reads PRAGMA user_version from a *sql.DB or *sql.Tx.
+func userVersion(q interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) (int, error) {
+	var v int
+	err := q.QueryRow("PRAGMA user_version").Scan(&v)
+	return v, err
+}
+
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	return errors.As(err, &se) && se.Code()&0xff == sqliteBusy
 }
 
 // Close closes the database.
