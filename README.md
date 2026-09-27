@@ -61,6 +61,15 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
+Known Claude Code behaviour, outside jot's control (seen with v2.1.283):
+
+- `suppressOriginalPrompt` is ignored, so the block message repeats your jot
+  as "Original prompt: >> …". Only you see it; the model does not.
+- In web and mobile sessions, Claude Code may send the first prompt to a small
+  model to generate the session title while the hook is still running, so the
+  title can be derived from a jot. The conversation model never receives it.
+  In the terminal CLI no such request was observed.
+
 ## Cursor hook
 
 Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):

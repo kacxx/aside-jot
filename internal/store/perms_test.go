@@ -138,3 +138,33 @@ func TestRefusesPlantedFiles(t *testing.T) {
 		}
 	})
 }
+
+// A destination that looks like an SQLite URI must be written as a plain file,
+// owner-only, not reinterpreted by VACUUM INTO.
+func TestBackupURIShapedPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("':' and '?' are not valid in Windows file names")
+	}
+	old := setUmask(0o022)
+	defer setUmask(old)
+	s, _ := openTemp(t)
+	if _, err := s.Insert(context.Background(), &Entry{Text: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := s.Backup(context.Background(), "file:x.db?mode=rwc"); err != nil {
+		t.Fatal(err)
+	}
+	literal := filepath.Join(dir, "file:x.db?mode=rwc")
+	fi, err := os.Stat(literal)
+	if err != nil || fi.Size() == 0 {
+		t.Fatalf("backup must be written to the literal path: %v", err)
+	}
+	if m := fi.Mode().Perm(); m != 0o600 {
+		t.Errorf("mode %o, want 600", m)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "x.db")); !os.IsNotExist(err) {
+		t.Fatalf("backup was redirected to x.db (%v)", err)
+	}
+}

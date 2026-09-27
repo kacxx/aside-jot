@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"github.com/kacxx/aside-jot/internal/app"
@@ -61,6 +62,20 @@ type request struct {
 	ID      json.RawMessage `json:"id,omitempty"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
+	// Present only on responses, which a client may send to a server.
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  json.RawMessage `json:"error,omitempty"`
+}
+
+// validID reports whether id is a JSON string or number. MCP forbids null ids,
+// and JSON-RPC does not allow objects, arrays or booleans.
+func validID(id json.RawMessage) bool {
+	s := bytes.TrimSpace(id)
+	if len(s) == 0 {
+		return false
+	}
+	c := s[0]
+	return c == '"' || c == '-' || (c >= '0' && c <= '9')
 }
 
 type response struct {
@@ -102,26 +117,41 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 }
 
 func (s *Server) handle(ctx context.Context, line []byte) *response {
+	null := json.RawMessage("null")
 	var req request
 	if err := json.Unmarshal(line, &req); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) {
-			return errResp(json.RawMessage("null"), codeParse, "parse error")
+			return errResp(null, codeParse, "parse error")
 		}
-		return errResp(json.RawMessage("null"), codeInvalidRequest, "invalid request")
+		// Valid JSON of the wrong shape, e.g. a batch array or a non-string
+		// method. Answer against the request's id when it is usable.
+		if validID(req.ID) {
+			return errResp(req.ID, codeInvalidRequest, "invalid request")
+		}
+		return errResp(null, codeInvalidRequest, "invalid request")
 	}
-	isNotification := len(req.ID) == 0 || string(req.ID) == "null"
-	if req.JSONRPC != "2.0" || req.Method == "" {
-		if isNotification {
-			return nil
+
+	// A response sent by the client: this server makes no requests, so there
+	// is nothing to match it against. Ignore it.
+	if req.Method == "" && (req.Result != nil || req.Error != nil) {
+		return nil
+	}
+	// A notification: act on it, never reply.
+	if req.ID == nil {
+		if req.JSONRPC == "2.0" && req.Method != "" {
+			_, _ = s.dispatch(ctx, req)
 		}
+		return nil
+	}
+	if !validID(req.ID) {
+		return errResp(null, codeInvalidRequest, "invalid request: id must be a string or number")
+	}
+	if req.JSONRPC != "2.0" || req.Method == "" {
 		return errResp(req.ID, codeInvalidRequest, "invalid request")
 	}
 
 	result, rerr := s.dispatch(ctx, req)
-	if isNotification {
-		return nil
-	}
 	if rerr != nil {
 		return &response{JSONRPC: "2.0", ID: req.ID, Error: rerr}
 	}
@@ -218,7 +248,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	}
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
-			return toolError("invalid arguments: " + err.Error()), nil
+			return toolError(argumentError(err)), nil
 		}
 	}
 	if args.Limit <= 0 {
@@ -237,7 +267,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		v = map[string]any{"entries": nonNil(es)}
 	case "show":
 		if args.ID <= 0 {
-			return toolError("id is required"), nil
+			return toolError("id is required and must be a positive integer"), nil
 		}
 		v, err = s.svc.Show(ctx, args.ID)
 		if errors.Is(err, app.ErrNotFound) {
@@ -261,6 +291,20 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		"content":           []map[string]any{{"type": "text", "text": string(b)}},
 		"structuredContent": v,
 	}, nil
+}
+
+// argumentError describes bad tool arguments without Go type names.
+func argumentError(err error) string {
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) && typeErr.Field != "" {
+		want := "a string"
+		switch typeErr.Type.Kind() {
+		case reflect.Int, reflect.Int64:
+			want = "an integer"
+		}
+		return fmt.Sprintf("invalid arguments: %s must be %s", typeErr.Field, want)
+	}
+	return "invalid arguments: expected an object"
 }
 
 func toolError(msg string) map[string]any {
