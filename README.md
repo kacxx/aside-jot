@@ -149,9 +149,11 @@ commit_sha, metadata` (JSON).
   shared like `/tmp`. An existing database with wider permissions is tightened
   when jot opens it.
 - WAL mode and `busy_timeout` are set on every connection.
-  `$JOT_BUSY_TIMEOUT_MS` (default 2000) is how long each database step of a
-  capture (opening, then the insert) waits on a locked database before the jot
-  is reported "NOT saved".
+  `$JOT_BUSY_TIMEOUT_MS` (default 2000, capped at 10000) is how long each
+  database step of a capture (opening, then the insert) waits on a locked
+  database before the jot is reported "NOT saved". The cap keeps a capture well
+  inside Claude Code's 30 s hook timeout: a hook the host kills can't block the
+  jot. If you set a `timeout` on the hook entry, keep it above 25 s.
 - Git context is best-effort, with a ~750ms budget. A detached HEAD records the
   commit but no branch. Outside a repo, the git fields are empty.
 
