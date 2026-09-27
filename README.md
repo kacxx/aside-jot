@@ -166,4 +166,5 @@ go test -race ./...
 ```
 
 See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against
-the built binary.
+the built binary, and [docs/mvp-validation.md](docs/mvp-validation.md) for the
+recorded results (tests, end-to-end run and hook latency) of the initial version.
