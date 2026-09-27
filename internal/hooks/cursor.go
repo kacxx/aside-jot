@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 
 	"github.com/kacxx/aside-jot/internal/app"
@@ -37,7 +36,7 @@ func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 		return writeJSON(w, CursorOutput{Continue: true})
 	}
 	var in CursorInput
-	if err := json.Unmarshal(p.data, &in); err != nil {
+	if err := decodePayload(p.data, &in); err != nil {
 		return writeJSON(w, CursorOutput{Continue: true})
 	}
 	if in.HookEventName != "" && in.HookEventName != "beforeSubmitPrompt" {

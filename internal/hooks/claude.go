@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 
 	"github.com/kacxx/aside-jot/internal/app"
@@ -39,7 +38,7 @@ func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 		return nil
 	}
 	var in ClaudeInput
-	if err := json.Unmarshal(p.data, &in); err != nil {
+	if err := decodePayload(p.data, &in); err != nil {
 		return nil
 	}
 	if in.HookEventName != "" && in.HookEventName != "UserPromptSubmit" {

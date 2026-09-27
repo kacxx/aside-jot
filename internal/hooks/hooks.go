@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -114,6 +115,20 @@ func skipValue(dec *json.Decoder) error {
 			return nil
 		}
 	}
+}
+
+// decodePayload decodes a hook payload that fits in memory. A field of the
+// wrong JSON type is not fatal: json.Unmarshal skips it and still fills every
+// other field, so a jot is recognised (and blocked) even when, say, session_id
+// arrives as a number. Only a syntactically malformed payload is an error,
+// which callers treat as pass-through.
+func decodePayload(data []byte, v any) error {
+	err := json.Unmarshal(data, v)
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		return nil
+	}
+	return err
 }
 
 // tooLarge is the failure message for a jot in an oversized payload.

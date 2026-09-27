@@ -355,3 +355,58 @@ func TestCursorFailureBlocks(t *testing.T) {
 	}
 	assertBlockedFailed(t, o.UserMessage, ">> orders pagination should probably be cursor-based, not offset")
 }
+
+// A field of the wrong JSON type must not let a jot through: the payload is
+// still well-formed, the prompt is still a jot, and it is saved with the
+// metadata that did decode.
+func TestWrongTypedFieldsStillBlock(t *testing.T) {
+	t.Run("claude", func(t *testing.T) {
+		for name, override := range map[string]map[string]any{
+			"session_id":      {"session_id": 123},
+			"cwd":             {"cwd": []int{1}},
+			"transcript_path": {"transcript_path": false},
+			"hook_event_name": {"hook_event_name": 5},
+		} {
+			t.Run(name, func(t *testing.T) {
+				open, path := tempDB(t)
+				_, b := runClaude(t, fixture(t, "claude", "capture", override), open)
+				assertBlockedOK(t, b, 1)
+				e := entries(t, path)[0]
+				if e.Text != "token cache TTL looks too long, check with infra before shipping" || e.Source != "claude" {
+					t.Fatalf("entry: %+v", e)
+				}
+				if name != "session_id" && e.SessionID != "3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47" {
+					t.Fatalf("well-typed session_id lost: %+v", e)
+				}
+			})
+		}
+	})
+	t.Run("cursor", func(t *testing.T) {
+		for name, override := range map[string]map[string]any{
+			"conversation_id":        {"conversation_id": 7},
+			"generation_id":          {"generation_id": []string{"x"}},
+			"workspace_roots string": {"workspace_roots": "/x"},
+			"workspace_roots ints":   {"workspace_roots": []int{1}},
+			"hook_event_name":        {"hook_event_name": true},
+		} {
+			t.Run(name, func(t *testing.T) {
+				open, path := tempDB(t)
+				_, o := runCursor(t, fixture(t, "cursor", "capture_single_root", override), open)
+				if o.Continue || o.UserMessage != "✓ Jotted #1" {
+					t.Fatalf("got %+v", o)
+				}
+				if e := entries(t, path)[0]; e.Source != "cursor" || e.Text != "orders pagination should probably be cursor-based, not offset" {
+					t.Fatalf("entry: %+v", e)
+				}
+			})
+		}
+	})
+	t.Run("prompt itself wrong type passes through", func(t *testing.T) {
+		if out, _ := runClaude(t, []byte(`{"session_id":1,"prompt":[">> x"]}`), neverOpen(t)); out != "" {
+			t.Fatalf("got %q", out)
+		}
+		if _, o := runCursor(t, []byte(`{"workspace_roots":"/x","prompt":{"a":">> x"}}`), neverOpen(t)); !o.Continue {
+			t.Fatalf("got %+v", o)
+		}
+	})
+}
