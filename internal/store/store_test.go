@@ -188,6 +188,37 @@ func TestConcurrentWriterPools(t *testing.T) {
 	}
 }
 
+// TestConcurrentFirstOpen races several openers on a file that does not exist
+// yet: creating it and switching it to WAL must not fail with SQLITE_BUSY.
+func TestConcurrentFirstOpen(t *testing.T) {
+	const trials, openers = 40, 8
+	for trial := 0; trial < trials; trial++ {
+		path := filepath.Join(t.TempDir(), "jot.db")
+		var wg sync.WaitGroup
+		errs := make(chan error, openers)
+		for g := 0; g < openers; g++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s, err := Open(path, 5*time.Second)
+				if err != nil {
+					errs <- err
+					return
+				}
+				defer s.Close()
+				if _, err := s.Insert(context.Background(), &Entry{Text: "x"}); err != nil {
+					errs <- err
+				}
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			t.Fatalf("trial %d: %v", trial, err)
+		}
+	}
+}
+
 func TestBackup(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openTemp(t)
