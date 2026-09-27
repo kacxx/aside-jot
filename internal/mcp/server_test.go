@@ -78,13 +78,17 @@ func TestSession(t *testing.T) {
 		ServerInfo      struct{ Name string }
 		Capabilities    map[string]any
 	}
-	json.Unmarshal(rs[0].Result, &init)
+	if err := json.Unmarshal(rs[0].Result, &init); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
 	if init.ProtocolVersion != "2025-06-18" || init.ServerInfo.Name != "jot" || init.Capabilities["tools"] == nil {
 		t.Errorf("initialize: %s", rs[0].Result)
 	}
 
 	var list struct{ Tools []struct{ Name string } }
-	json.Unmarshal(rs[1].Result, &list)
+	if err := json.Unmarshal(rs[1].Result, &list); err != nil {
+		t.Fatalf("tools/list: %v", err)
+	}
 	var names []string
 	for _, tl := range list.Tools {
 		names = append(names, tl.Name)
@@ -143,7 +147,7 @@ func TestUnknownProtocolVersionFallsBack(t *testing.T) {
 	if err := NewServer(nil, "t").Serve(context.Background(), strings.NewReader(in), &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), LatestProtocolVersion) {
-		t.Fatal(out.String())
+	if !strings.Contains(out.String(), `"protocolVersion":"2025-11-25"`) {
+		t.Fatalf("unknown versions must be counter-offered the newest supported one: %s", out.String())
 	}
 }

@@ -1,0 +1,24 @@
+version: "2"
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused
+  default: standard
+  enable:
+    - errorlint # errors.Is/As instead of == and type assertions on wrapped errors
+    - gocritic
+    - misspell
+    - nolintlint
+    - unconvert
+  exclusions:
+    presets:
+      # Unchecked Close, Remove, Flush and print calls.
+      - std-error-handling
+    rules:
+      # Test teardown: a failed rollback can't change the result.
+      - path: _test\.go
+        linters: [errcheck]
+        text: "`\\w+\\.ExecContext` is not checked"
+
+formatters:
+  enable:
+    - gofmt

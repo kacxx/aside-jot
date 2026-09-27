@@ -37,8 +37,9 @@ func Detect(ctx context.Context, dir string) Info {
 	if !ok || root == "" {
 		return info
 	}
-	info.Root = root
-	info.Name = filepath.Base(root)
+	// git prints forward slashes on every OS; store the native form.
+	info.Root = filepath.FromSlash(root)
+	info.Name = filepath.Base(info.Root)
 	// symbolic-ref fails on detached HEAD, but works on an unborn branch.
 	info.Branch, _ = run(ctx, dir, "symbolic-ref", "--quiet", "--short", "HEAD")
 	// rev-parse fails before the first commit.
