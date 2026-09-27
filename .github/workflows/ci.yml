@@ -50,3 +50,22 @@ jobs:
       - name: Test
         if: runner.os != 'Linux'
         run: go test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Config in .golangci.yml. Pinned so a new linter release can't turn CI
+      # red on its own; bump deliberately.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0

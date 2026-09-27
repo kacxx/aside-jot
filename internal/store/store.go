@@ -166,7 +166,7 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // after Commit this is a no-op returning ErrTxDone
 	if v, err := userVersion(tx); err != nil || v >= schemaVersion {
 		return err
 	}
@@ -292,9 +292,12 @@ func (s *Store) Backup(ctx context.Context, dst string) error {
 	if err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(dst)
+		return fmt.Errorf("backup: %w", err)
+	}
 	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, dst); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return fmt.Errorf("backup: %w", err)
 	}
 	return nil

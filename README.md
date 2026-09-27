@@ -171,6 +171,7 @@ model. Everything else can come later.
 
 ```sh
 go test -race ./...
+golangci-lint run   # v2.14.0, config in .golangci.yml
 ```
 
 See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against
