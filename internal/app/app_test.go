@@ -11,22 +11,45 @@ import (
 )
 
 func TestDBPath(t *testing.T) {
-	t.Setenv("JOT_DB", "/tmp/custom.db")
-	if p, _ := DBPath(); p != "/tmp/custom.db" {
-		t.Errorf("JOT_DB: %s", p)
-	}
-	t.Setenv("JOT_DB", "")
-	t.Setenv("XDG_DATA_HOME", "/data")
-	if p, _ := DBPath(); p != filepath.Join("/data", "jot", "jot.db") {
-		t.Errorf("XDG: %s", p)
-	}
-	if runtime.GOOS == "linux" {
-		t.Setenv("XDG_DATA_HOME", "")
-		t.Setenv("HOME", "/home/u")
-		if p, _ := DBPath(); p != "/home/u/.local/share/jot/jot.db" {
-			t.Errorf("default: %s", p)
+	dir := t.TempDir() // a native absolute path on every OS
+	check := func(what, want string) {
+		t.Helper()
+		got, err := DBPath()
+		if err != nil || got != want {
+			t.Errorf("%s: got %q (%v), want %q", what, got, err, want)
 		}
 	}
+
+	custom := filepath.Join(dir, "custom.db")
+	t.Setenv("JOT_DB", custom)
+	check("JOT_DB", custom)
+
+	t.Setenv("JOT_DB", "rel.db")
+	if p, err := DBPath(); err != nil || !filepath.IsAbs(p) || filepath.Base(p) != "rel.db" {
+		t.Errorf("relative JOT_DB must be made absolute: %q (%v)", p, err)
+	}
+
+	t.Setenv("JOT_DB", "")
+	t.Setenv("XDG_DATA_HOME", dir)
+	check("XDG_DATA_HOME", filepath.Join(dir, "jot", "jot.db"))
+
+	// The per-OS default, which a relative XDG_DATA_HOME also falls back to.
+	var want string
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("LOCALAPPDATA", dir)
+		want = filepath.Join(dir, "jot", "jot.db")
+	case "darwin":
+		t.Setenv("HOME", dir)
+		want = filepath.Join(dir, "Library", "Application Support", "jot", "jot.db")
+	default:
+		t.Setenv("HOME", dir)
+		want = filepath.Join(dir, ".local", "share", "jot", "jot.db")
+	}
+	t.Setenv("XDG_DATA_HOME", "")
+	check("default", want)
+	t.Setenv("XDG_DATA_HOME", "relative")
+	check("relative XDG_DATA_HOME", want)
 }
 
 func TestBusyTimeout(t *testing.T) {

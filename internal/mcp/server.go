@@ -19,7 +19,9 @@ import (
 )
 
 // LatestProtocolVersion is offered when the client asks for one we don't know.
-const LatestProtocolVersion = "2025-06-18"
+// It is the newest initialize-handshake revision; 2026-07-28 replaced the
+// handshake with server/discover, which this server does not implement.
+const LatestProtocolVersion = "2025-11-25"
 
 var supportedVersions = map[string]bool{
 	"2024-11-05": true,

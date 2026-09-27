@@ -26,8 +26,15 @@ type CursorOutput struct {
 
 // Cursor handles a Cursor beforeSubmitPrompt hook.
 func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
+	p := readPayload(r)
+	if p.oversized {
+		if _, ok := capture.Match(p.prompt); ok {
+			return writeJSON(w, CursorOutput{Continue: false, UserMessage: tooLarge(p.prompt)})
+		}
+		return writeJSON(w, CursorOutput{Continue: true})
+	}
 	var in CursorInput
-	if err := json.Unmarshal(readPayload(r), &in); err != nil {
+	if err := json.Unmarshal(p.data, &in); err != nil {
 		return writeJSON(w, CursorOutput{Continue: true})
 	}
 	if in.HookEventName != "" && in.HookEventName != "beforeSubmitPrompt" {

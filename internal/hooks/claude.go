@@ -28,8 +28,15 @@ type ClaudeBlock struct {
 // Claude handles a Claude Code UserPromptSubmit hook. Pass-through writes
 // nothing (any stdout would be added to the model's context).
 func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
+	p := readPayload(r)
+	if p.oversized {
+		if _, ok := capture.Match(p.prompt); ok {
+			return writeJSON(w, ClaudeBlock{Decision: "block", Reason: tooLarge(p.prompt), SuppressOriginalPrompt: true})
+		}
+		return nil
+	}
 	var in ClaudeInput
-	if err := json.Unmarshal(readPayload(r), &in); err != nil {
+	if err := json.Unmarshal(p.data, &in); err != nil {
 		return nil
 	}
 	if in.HookEventName != "" && in.HookEventName != "UserPromptSubmit" {
