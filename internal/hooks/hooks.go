@@ -22,6 +22,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/kacxx/aside-jot/internal/app"
 )
 
@@ -37,10 +39,11 @@ const maxEcho = 64 << 10
 type payload struct {
 	data []byte // the whole payload; nil if oversized
 
-	// For an oversized payload: its top-level "prompt" string, or "" if it
-	// has none or the payload is malformed.
+	// For an oversized payload: its top-level "prompt" and "hook_event_name"
+	// strings, or "" if absent or the payload is malformed.
 	oversized bool
 	prompt    string
+	event     string
 }
 
 // readPayload reads a hook payload. One larger than maxPayload is not parsed
@@ -51,45 +54,49 @@ func readPayload(r io.Reader) payload {
 	if len(data) <= maxPayload {
 		return payload{data: data}
 	}
-	prompt := scanPrompt(io.MultiReader(bytes.NewReader(data), r))
+	prompt, event := scanPrompt(io.MultiReader(bytes.NewReader(data), r))
 	// Drain stdin so the host never sees a broken pipe.
 	_, _ = io.Copy(io.Discard, r)
-	return payload{oversized: true, prompt: prompt}
+	return payload{oversized: true, prompt: prompt, event: event}
 }
 
-// scanPrompt streams a JSON object and returns its top-level "prompt" string,
-// matching json.Unmarshal: keys compare case-insensitively and the last one
-// wins. Other values are skipped token by token, so memory is bounded by the
-// largest single token, not the payload. Malformed input yields "", like a
-// malformed payload that fits in memory.
-func scanPrompt(r io.Reader) string {
+// scanPrompt streams a JSON object and returns its top-level "prompt" and
+// "hook_event_name" strings, matching json.Unmarshal: keys compare
+// case-insensitively and the last one wins. Other values are skipped token by
+// token, so memory is bounded by the largest single token, not the payload.
+// Malformed input yields "", "", like a malformed payload that fits in memory.
+func scanPrompt(r io.Reader) (prompt, event string) {
 	dec := json.NewDecoder(r)
 	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
-		return ""
+		return "", ""
 	}
-	var prompt string
 	for dec.More() {
 		t, err := dec.Token()
 		if err != nil {
-			return ""
+			return "", ""
 		}
-		if key, _ := t.(string); strings.EqualFold(key, "prompt") {
-			if err := dec.Decode(&prompt); err != nil {
-				return ""
-			}
-			continue
+		key, _ := t.(string)
+		switch {
+		case strings.EqualFold(key, "prompt"):
+			err = dec.Decode(&prompt)
+		case strings.EqualFold(key, "hook_event_name"):
+			err = dec.Decode(&event)
+		default:
+			err = skipValue(dec)
 		}
-		if err := skipValue(dec); err != nil {
-			return ""
+		if err != nil {
+			return "", ""
 		}
 	}
 	if t, err := dec.Token(); err != nil || t != json.Delim('}') {
-		return ""
+		return "", ""
 	}
-	return prompt
+	return prompt, event
 }
 
-// skipValue consumes one JSON value from dec.
+// skipValue consumes one JSON value from dec. It walks tokens rather than
+// calling dec.Decode into a json.RawMessage, which would buffer the whole value
+// (possibly most of an oversized payload) in memory.
 func skipValue(dec *json.Decoder) error {
 	depth := 0
 	for {
@@ -118,14 +125,7 @@ func tooLarge(original string) string {
 		}
 		original = original[:cut] + "\n…[truncated]"
 	}
-	return notSaved(fmt.Errorf("hook payload is larger than %s", sizeLabel(maxPayload)), original)
-}
-
-func sizeLabel(n int) string {
-	if n%(1<<20) == 0 {
-		return fmt.Sprintf("%d MiB", n>>20)
-	}
-	return fmt.Sprintf("%d KiB", n>>10)
+	return notSaved(fmt.Errorf("hook payload is larger than %s", humanize.IBytes(uint64(maxPayload))), original)
 }
 
 // save opens the service and captures req. It always returns a message for

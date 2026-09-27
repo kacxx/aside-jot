@@ -112,7 +112,9 @@ func Open(path string, busyTimeout time.Duration) (*Store, error) {
 			return nil, fmt.Errorf("create data dir: %w", err)
 		}
 	}
-	secureDBFiles(path)
+	if err := secureDBFiles(path); err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
 	// Each attempt gets its own handle whose busy_timeout is what is left of
 	// the budget, so neither the connect-time WAL switch nor BEGIN IMMEDIATE
 	// can wait past the deadline.
@@ -284,7 +286,7 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status string) error {
 // It refuses to overwrite an existing file. The backup is owner-only: dst is
 // created exclusively with filePerm first, and VACUUM INTO accepts an empty
 // file, so there is no moment when the copy is readable by others.
-func (s *Store) Backup(ctx context.Context, dst string) error {
+func (s *Store) Backup(ctx context.Context, dst string) (err error) {
 	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, filePerm)
 	if errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("backup: %s already exists; refusing to overwrite", dst)
@@ -292,12 +294,16 @@ func (s *Store) Backup(ctx context.Context, dst string) error {
 	if err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
+	// From here on dst is ours: remove it on any failure.
+	defer func() {
+		if err != nil {
+			_ = os.Remove(dst)
+		}
+	}()
 	if err := f.Close(); err != nil {
-		_ = os.Remove(dst)
 		return fmt.Errorf("backup: %w", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, dst); err != nil {
-		_ = os.Remove(dst)
 		return fmt.Errorf("backup: %w", err)
 	}
 	return nil

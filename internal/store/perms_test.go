@@ -86,3 +86,55 @@ func TestFailedBackupLeavesNoFile(t *testing.T) {
 		t.Fatalf("failed backup left %s behind (%v)", dst, err)
 	}
 }
+
+func TestRefusesPlantedFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission model")
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		t.Run("symlink"+suffix, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(dir, "attacker.db")
+			if err := os.WriteFile(target, nil, 0o666); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "jot.db")
+			if err := os.Symlink(target, path+suffix); err != nil {
+				t.Fatal(err)
+			}
+			if s, err := Open(path, time.Second); err == nil {
+				s.Close()
+				t.Fatal("Open must refuse a symlinked database file")
+			}
+			if fi, _ := os.Stat(target); fi.Size() != 0 {
+				t.Fatalf("attacker file received %d bytes", fi.Size())
+			}
+		})
+	}
+	t.Run("directory", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "jot.db")
+		if err := os.Mkdir(path+"-wal", 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if s, err := Open(path, time.Second); err == nil {
+			s.Close()
+			t.Fatal("Open must refuse a non-regular sidecar")
+		}
+	})
+	t.Run("other owner", func(t *testing.T) {
+		if os.Getuid() != 0 {
+			t.Skip("needs root to create a file owned by another user")
+		}
+		path := filepath.Join(t.TempDir(), "jot.db")
+		if err := os.WriteFile(path, nil, 0o666); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chown(path, 12345, 12345); err != nil {
+			t.Fatal(err)
+		}
+		if s, err := Open(path, time.Second); err == nil {
+			s.Close()
+			t.Fatal("Open must refuse a database owned by another user")
+		}
+	})
+}

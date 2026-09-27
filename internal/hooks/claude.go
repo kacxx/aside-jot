@@ -30,6 +30,9 @@ type ClaudeBlock struct {
 func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	p := readPayload(r)
 	if p.oversized {
+		if p.event != "" && p.event != "UserPromptSubmit" {
+			return nil
+		}
 		if _, ok := capture.Match(p.prompt); ok {
 			return writeJSON(w, ClaudeBlock{Decision: "block", Reason: tooLarge(p.prompt), SuppressOriginalPrompt: true})
 		}
