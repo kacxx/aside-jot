@@ -1,0 +1,14 @@
+{
+  "conversation_id": "e5b0a1c7-3d2f-4c8e-9a14-7f6d2b0c8e31",
+  "generation_id": "0c7e2f94-6a1b-4d53-8e0f-b92a3c5d71e6",
+  "model": "claude-sonnet-4.5",
+  "hook_event_name": "beforeSubmitPrompt",
+  "cursor_version": "1.7.52",
+  "workspace_roots": ["/Users/dev/src/webapp"],
+  "user_email": "dev@example.com",
+  "transcript_path": null,
+  "prompt": "Add pagination to the /api/orders endpoint",
+  "attachments": [
+    {"type": "file", "file_path": "/Users/dev/src/webapp/api/orders.go"}
+  ]
+}

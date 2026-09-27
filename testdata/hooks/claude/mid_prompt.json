@@ -1,0 +1,9 @@
+{
+  "session_id": "3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47",
+  "prompt_id": "c81f0a55-2d9e-4b17-8a63-1e5b9c0d7f24",
+  "transcript_path": "/Users/dev/.claude/projects/-Users-dev-src-webapp/3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47.jsonl",
+  "cwd": "/Users/dev/src/webapp",
+  "permission_mode": "acceptEdits",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "In bash, why does `cmd >> log.txt` not capture stderr?\n>> this line is part of the question"
+}

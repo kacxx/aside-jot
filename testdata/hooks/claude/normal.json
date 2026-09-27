@@ -1,0 +1,9 @@
+{
+  "session_id": "3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47",
+  "prompt_id": "b2a7e1d0-5c3f-4a8b-9e21-6f0d4c7a3b18",
+  "transcript_path": "/Users/dev/.claude/projects/-Users-dev-src-webapp/3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47.jsonl",
+  "cwd": "/Users/dev/src/webapp",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Refactor the session middleware to use the new token cache"
+}
