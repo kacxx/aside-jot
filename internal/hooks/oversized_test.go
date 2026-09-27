@@ -63,7 +63,7 @@ func TestOversizedJotIsBlocked(t *testing.T) {
 			if b == nil || b.Decision != "block" {
 				t.Fatalf("oversized jot must be blocked, got %+v", b)
 			}
-			if !strings.Contains(b.Reason, "NOT saved") || !strings.Contains(b.Reason, "larger than 4 KiB") ||
+			if !strings.Contains(b.Reason, "NOT saved") || !strings.Contains(b.Reason, "larger than 4.0 KiB") ||
 				!strings.Contains(b.Reason, ">> secret") {
 				t.Fatalf("reason: %q", b.Reason)
 			}
@@ -117,5 +117,40 @@ func TestTooLargeClipsEcho(t *testing.T) {
 	}
 	if short := tooLarge(">> short"); !strings.HasSuffix(short, ">> short") {
 		t.Fatalf("short prompt must be echoed whole: %q", short)
+	}
+}
+
+// An oversized payload follows the same hook_event_name rule as one that fits
+// in memory: another event passes through, the hook's own event is checked.
+func TestOversizedOtherEventPassesThrough(t *testing.T) {
+	smallLimit(t)
+	padString := padString()
+	jot := `"prompt":">> secret"`
+
+	claudeOther := big(t, `"hook_event_name":"Stop"`, jot, padString)
+	if out, _ := runClaude(t, claudeOther, neverOpen(t)); out != "" {
+		t.Fatalf("claude, other event: %q", out)
+	}
+	claudeOwn := big(t, padString, jot, `"Hook_Event_Name":"UserPromptSubmit"`)
+	if _, b := runClaude(t, claudeOwn, neverOpen(t)); b == nil || b.Decision != "block" {
+		t.Fatalf("claude, own event: %+v", b)
+	}
+
+	cursorOther := big(t, jot, padString, `"hook_event_name":"afterAgentResponse"`)
+	if _, o := runCursor(t, cursorOther, neverOpen(t)); !o.Continue {
+		t.Fatalf("cursor, other event: %+v", o)
+	}
+	cursorOwn := big(t, `"hook_event_name":"beforeSubmitPrompt"`, jot, padString)
+	if _, o := runCursor(t, cursorOwn, neverOpen(t)); o.Continue {
+		t.Fatalf("cursor, own event: %+v", o)
+	}
+}
+
+func TestTooLargeReportsUnroundedLimit(t *testing.T) {
+	old := maxPayload
+	maxPayload = 5000
+	t.Cleanup(func() { maxPayload = old })
+	if msg := tooLarge(">> x"); !strings.Contains(msg, "larger than 4.9 KiB") {
+		t.Fatalf("got %q", msg)
 	}
 }

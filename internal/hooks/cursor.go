@@ -28,6 +28,9 @@ type CursorOutput struct {
 func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	p := readPayload(r)
 	if p.oversized {
+		if p.event != "" && p.event != "beforeSubmitPrompt" {
+			return writeJSON(w, CursorOutput{Continue: true})
+		}
 		if _, ok := capture.Match(p.prompt); ok {
 			return writeJSON(w, CursorOutput{Continue: false, UserMessage: tooLarge(p.prompt)})
 		}
