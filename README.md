@@ -142,8 +142,9 @@ commit_sha, metadata` (JSON).
   directory (`~/.local/share/jot`, `~/Library/Application Support/jot`,
   `%LOCALAPPDATA%\jot`).
 - WAL mode and `busy_timeout` are set on every connection.
-  `$JOT_BUSY_TIMEOUT_MS` (default 2000) controls how long a capture waits on a
-  locked database before reporting "NOT saved".
+  `$JOT_BUSY_TIMEOUT_MS` (default 2000) is how long each database step of a
+  capture (opening, then the insert) waits on a locked database before the jot
+  is reported "NOT saved".
 - Git context is best-effort, with a ~750ms budget. A detached HEAD records the
   commit but no branch. Outside a repo, the git fields are empty.
 
