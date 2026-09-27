@@ -116,6 +116,9 @@ space or a backslash.
 - **A recognised jot fails safe**: it is always blocked, even if saving failed.
   On failure the message says `✗ Jot NOT saved (<reason>)` and includes your
   original text so you can copy it.
+- A payload too large to parse in memory (over 16 MiB) is still checked: its
+  prompt is found by streaming, and a jot in it is blocked and reported as
+  NOT saved.
 - The hook process always exits 0.
 
 ## CLI
@@ -141,6 +144,10 @@ commit_sha, metadata` (JSON).
 - Path: `$JOT_DB`, else `$XDG_DATA_HOME/jot/jot.db`, else the OS per-user data
   directory (`~/.local/share/jot`, `~/Library/Application Support/jot`,
   `%LOCALAPPDATA%\jot`).
+- The database, its `-wal`/`-shm` files and backups are owner-only (`0600`)
+  on Unix, whatever the umask, including when `$JOT_DB` points somewhere
+  shared like `/tmp`. An existing database with wider permissions is tightened
+  when jot opens it.
 - WAL mode and `busy_timeout` are set on every connection.
   `$JOT_BUSY_TIMEOUT_MS` (default 2000) is how long each database step of a
   capture (opening, then the insert) waits on a locked database before the jot
@@ -164,6 +171,7 @@ model. Everything else can come later.
 
 ```sh
 go test -race ./...
+golangci-lint run   # v2.14.0, config in .golangci.yml
 ```
 
 See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against

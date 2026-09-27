@@ -54,7 +54,10 @@ func TestCLIFlow(t *testing.T) {
 
 func TestHookAlwaysExitsZero(t *testing.T) {
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "file", "jot.db"))
-	os.WriteFile(filepath.Dir(os.Getenv("JOT_DB")), nil, 0o600) // make the DB unopenable
+	// A regular file where the data directory should be makes the DB unopenable.
+	if err := os.WriteFile(filepath.Dir(os.Getenv("JOT_DB")), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, args := range [][]string{{}, {"nope"}, {"claude"}, {"cursor"}} {
 		var out, errb bytes.Buffer

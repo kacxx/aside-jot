@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -21,7 +25,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Windows checkouts may use CRLF, which gofmt reports; formatting is
+      # platform-independent, so check it once.
       - name: Check formatting
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           unformatted="$(gofmt -l .)"
@@ -35,4 +42,30 @@ jobs:
         run: go vet ./...
 
       - name: Test with race detector
+        if: runner.os == 'Linux'
         run: go test -race ./...
+
+      # The race detector needs cgo and a C toolchain; the Windows job is here
+      # for path, permission and SQLite-on-Windows behaviour.
+      - name: Test
+        if: runner.os != 'Linux'
+        run: go test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Config in .golangci.yml. Pinned so a new linter release can't turn CI
+      # red on its own; bump deliberately.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
