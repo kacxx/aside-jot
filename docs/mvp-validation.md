@@ -69,9 +69,9 @@ ok  	github.com/kacxx/aside-jot/internal/store	1.796s
 ## End-to-end (built binary, fixtures piped through `jot hook`)
 
 Throwaway `$JOT_DB`. Capture fixtures had `cwd` / `workspace_roots` rewritten
-to this checkout, or to a non-git temp dir, with `jq`. The checkout was still
-named `Claude_Code_Scratch_Pad` and on the import branch at the time, so that
-is the repo and branch the captures record.
+to this checkout, or to a non-git temp dir, with `jq`. These runs were made in
+a clone of `kacxx/Claude_Code_Scratch_Pad`, where the code was first pushed by
+mistake before moving here, so that is the repo and branch the captures record.
 
 ```
 == claude: pass-through (expect no stdout) ==
@@ -160,6 +160,7 @@ several processes open a database file that doesn't exist yet, switching it to
 WAL can return `SQLITE_BUSY` immediately, without calling the busy handler. The
 failure was safe: the hook still blocked the jot and reported "NOT saved". It
 could only happen the first time the database file was created. Fixed after the
-import: `Open` retries within the busy-timeout budget, and the schema is created
-under `BEGIN IMMEDIATE`. `TestConcurrentFirstOpen` covers it and failed 4 of 5
+import: `Open` retries, giving each attempt only what is left of the busy
+timeout so the total wait stays within it, and the schema is created under
+`BEGIN IMMEDIATE`. `TestOpenHonoursBusyTimeout` covers the bound. `TestConcurrentFirstOpen` covers it and failed 4 of 5
 runs without the fix.
