@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -163,6 +164,8 @@ func TestRequestIDHandling(t *testing.T) {
 		`{"jsonrpc":"2.0","id":15,"result":{}}`,
 		`{"jsonrpc":"2.0","id":14,"error":{"code":1,"message":"x"}}`,
 		`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{}}`,
+		`{}`,
+		`{"jsonrpc":"2.0"}`,
 		`{"jsonrpc":"2.0","id":"s1","method":"ping"}`,
 		`{"jsonrpc":"2.0","id":-2,"method":"ping"}`,
 	}, "\n")
@@ -192,6 +195,8 @@ func TestRequestIDHandling(t *testing.T) {
 		"null:-32600", // id boolean
 		"16:-32600",   // method not a string, id still usable
 		// client responses and the notification get no reply
+		"null:-32600", // {} has no id and no method: invalid, not a notification
+		"null:-32600", // same without a method
 		`"s1":0`,
 		"-2:0",
 	}
@@ -227,6 +232,18 @@ func TestShowArgumentErrors(t *testing.T) {
 		}
 		if strings.Contains(text, "Go") || strings.Contains(text, "int64") {
 			t.Errorf("%s: leaks Go internals: %q", args, text)
+		}
+	}
+}
+
+func TestJSONTypeName(t *testing.T) {
+	for k, want := range map[reflect.Kind]string{
+		reflect.Int: "an integer", reflect.Int64: "an integer", reflect.Uint32: "an integer",
+		reflect.Float64: "a number", reflect.Bool: "a boolean", reflect.String: "a string",
+		reflect.Slice: "an array", reflect.Map: "an object", reflect.Struct: "an object",
+	} {
+		if got := jsonTypeName(k); got != want {
+			t.Errorf("%v: got %q, want %q", k, got, want)
 		}
 	}
 }

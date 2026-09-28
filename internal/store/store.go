@@ -287,6 +287,9 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status string) error {
 // created exclusively with filePerm first, and VACUUM INTO accepts an empty
 // file, so there is no moment when the copy is readable by others.
 func (s *Store) Backup(ctx context.Context, dst string) (err error) {
+	if strings.TrimSpace(dst) == "" {
+		return errors.New("backup: destination path is empty")
+	}
 	// VACUUM INTO reads a destination starting with "file:" as a URI, which
 	// would write the copy somewhere other than the file created below. An
 	// absolute path never starts with "file:".

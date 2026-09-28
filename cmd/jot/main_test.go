@@ -69,3 +69,25 @@ func TestHookAlwaysExitsZero(t *testing.T) {
 		}
 	}
 }
+
+// The backup message reports the absolute path written, not the argument.
+func TestBackupReportsAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("JOT_DB", filepath.Join(dir, "jot.db"))
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+	var out bytes.Buffer
+	if err := run([]string{"backup", filepath.Join("..", "b.db")}, nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "b.db")
+	if got := strings.TrimSpace(out.String()); got != "✓ Backed up to "+want {
+		t.Fatalf("got %q, want path %q", got, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatal(err)
+	}
+}

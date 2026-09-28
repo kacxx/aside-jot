@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -177,7 +178,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err := svc.Backup(ctx, args[0]); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, "✓ Backed up to", args[0])
+		// Report the absolute path Backup wrote to, not the argument as typed.
+		dst, err := filepath.Abs(args[0])
+		if err != nil {
+			dst = args[0]
+		}
+		fmt.Fprintln(stdout, "✓ Backed up to", dst)
 	case "mcp":
 		return mcp.NewServer(svc, buildVersion()).Serve(ctx, stdin, stdout)
 	default:

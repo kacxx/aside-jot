@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -166,5 +167,17 @@ func TestBackupURIShapedPath(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "x.db")); !os.IsNotExist(err) {
 		t.Fatalf("backup was redirected to x.db (%v)", err)
+	}
+}
+
+// An empty destination is an error about the argument, not "already exists"
+// (filepath.Abs("") would otherwise resolve to the working directory).
+func TestBackupEmptyDestination(t *testing.T) {
+	s, _ := openTemp(t)
+	for _, dst := range []string{"", "  "} {
+		err := s.Backup(context.Background(), dst)
+		if err == nil || !strings.Contains(err.Error(), "destination path is empty") {
+			t.Errorf("Backup(%q) = %v, want an empty-path error", dst, err)
+		}
 	}
 }
