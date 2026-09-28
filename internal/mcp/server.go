@@ -137,11 +137,13 @@ func (s *Server) handle(ctx context.Context, line []byte) *response {
 	if req.Method == "" && (req.Result != nil || req.Error != nil) {
 		return nil
 	}
-	// A notification: act on it, never reply.
+	// No id: a valid notification is acted on without a reply. Anything else
+	// without an id, such as {}, is an invalid request, answered with id null.
 	if req.ID == nil {
-		if req.JSONRPC == "2.0" && req.Method != "" {
-			_, _ = s.dispatch(ctx, req)
+		if req.JSONRPC != "2.0" || req.Method == "" {
+			return errResp(null, codeInvalidRequest, "invalid request")
 		}
+		_, _ = s.dispatch(ctx, req)
 		return nil
 	}
 	if !validID(req.ID) {
@@ -297,14 +299,28 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 func argumentError(err error) string {
 	var typeErr *json.UnmarshalTypeError
 	if errors.As(err, &typeErr) && typeErr.Field != "" {
-		want := "a string"
-		switch typeErr.Type.Kind() {
-		case reflect.Int, reflect.Int64:
-			want = "an integer"
-		}
-		return fmt.Sprintf("invalid arguments: %s must be %s", typeErr.Field, want)
+		return fmt.Sprintf("invalid arguments: %s must be %s", typeErr.Field, jsonTypeName(typeErr.Type.Kind()))
 	}
 	return "invalid arguments: expected an object"
+}
+
+// jsonTypeName names the JSON type a Go field of kind k expects.
+func jsonTypeName(k reflect.Kind) string {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "an integer"
+	case reflect.Float32, reflect.Float64:
+		return "a number"
+	case reflect.Bool:
+		return "a boolean"
+	case reflect.String:
+		return "a string"
+	case reflect.Slice, reflect.Array:
+		return "an array"
+	default:
+		return "an object"
+	}
 }
 
 func toolError(msg string) map[string]any {
