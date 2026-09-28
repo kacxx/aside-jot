@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kacxx/aside-jot/internal/app"
@@ -40,10 +42,15 @@ Usage:
 Environment:
   JOT_DB                   database path (default: $XDG_DATA_HOME/jot/jot.db,
                            else the OS per-user data directory)
-  JOT_BUSY_TIMEOUT_MS      how long each database step waits on a lock (default 2000)
+  JOT_BUSY_TIMEOUT_MS      how long each database step waits on a lock
+                           (default 2000, capped at 10000)
 `
 
 func main() {
+	// If a reader closes its end, a write to stdout must fail with EPIPE rather
+	// than kill the process with SIGPIPE: hooks always exit 0, and jot mcp and
+	// the CLI shut down through their normal error paths.
+	signal.Ignore(syscall.SIGPIPE)
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "hook" {
 		os.Exit(runHook(args[1:], os.Stdin, os.Stdout, os.Stderr))
