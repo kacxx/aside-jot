@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,4 +138,46 @@ func TestRefusesPlantedFiles(t *testing.T) {
 			t.Fatal("Open must refuse a database owned by another user")
 		}
 	})
+}
+
+// A destination that looks like an SQLite URI must be written as a plain file,
+// owner-only, not reinterpreted by VACUUM INTO.
+func TestBackupURIShapedPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("':' and '?' are not valid in Windows file names")
+	}
+	old := setUmask(0o022)
+	defer setUmask(old)
+	s, _ := openTemp(t)
+	if _, err := s.Insert(context.Background(), &Entry{Text: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := s.Backup(context.Background(), "file:x.db?mode=rwc"); err != nil {
+		t.Fatal(err)
+	}
+	literal := filepath.Join(dir, "file:x.db?mode=rwc")
+	fi, err := os.Stat(literal)
+	if err != nil || fi.Size() == 0 {
+		t.Fatalf("backup must be written to the literal path: %v", err)
+	}
+	if m := fi.Mode().Perm(); m != 0o600 {
+		t.Errorf("mode %o, want 600", m)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "x.db")); !os.IsNotExist(err) {
+		t.Fatalf("backup was redirected to x.db (%v)", err)
+	}
+}
+
+// An empty destination is an error about the argument, not "already exists"
+// (filepath.Abs("") would otherwise resolve to the working directory).
+func TestBackupEmptyDestination(t *testing.T) {
+	s, _ := openTemp(t)
+	for _, dst := range []string{"", "  "} {
+		err := s.Backup(context.Background(), dst)
+		if err == nil || !strings.Contains(err.Error(), "destination path is empty") {
+			t.Errorf("Backup(%q) = %v, want an empty-path error", dst, err)
+		}
+	}
 }

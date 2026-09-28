@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -149,5 +151,99 @@ func TestUnknownProtocolVersionFallsBack(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"protocolVersion":"2025-11-25"`) {
 		t.Fatalf("unknown versions must be counter-offered the newest supported one: %s", out.String())
+	}
+}
+
+// JSON-RPC edge cases: which messages get a reply, and with which id.
+func TestRequestIDHandling(t *testing.T) {
+	in := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":null,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":true,"method":"ping"}`,
+		`{"jsonrpc":"2.0","id":16,"method":123}`,
+		`{"jsonrpc":"2.0","id":15,"result":{}}`,
+		`{"jsonrpc":"2.0","id":14,"error":{"code":1,"message":"x"}}`,
+		`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{}}`,
+		`{}`,
+		`{"jsonrpc":"2.0"}`,
+		`{"jsonrpc":"2.0","id":"s1","method":"ping"}`,
+		`{"jsonrpc":"2.0","id":-2,"method":"ping"}`,
+	}, "\n")
+	var out bytes.Buffer
+	if err := NewServer(nil, "t").Serve(context.Background(), strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	type resp struct {
+		ID    json.RawMessage `json:"id"`
+		Error *rpcError       `json:"error"`
+	}
+	var got []string
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var r resp
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("bad line %q", line)
+		}
+		code := 0
+		if r.Error != nil {
+			code = r.Error.Code
+		}
+		got = append(got, string(r.ID)+":"+strconv.Itoa(code))
+	}
+	want := []string{
+		"null:-32600", // id null
+		"null:-32600", // id object
+		"null:-32600", // id boolean
+		"16:-32600",   // method not a string, id still usable
+		// client responses and the notification get no reply
+		"null:-32600", // {} has no id and no method: invalid, not a notification
+		"null:-32600", // same without a method
+		`"s1":0`,
+		"-2:0",
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got  %v\nwant %v", got, want)
+	}
+}
+
+func TestShowArgumentErrors(t *testing.T) {
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	s := NewServer(svc, "t")
+	for args, want := range map[string]string{
+		`{"id":0}`:     "id is required and must be a positive integer",
+		`{"id":-3}`:    "id is required and must be a positive integer",
+		`{}`:           "id is required and must be a positive integer",
+		`{"id":"one"}`: "invalid arguments: id must be an integer",
+		`{"id":1.5}`:   "invalid arguments: id must be an integer",
+		`["x"]`:        "invalid arguments: expected an object",
+		`{"query":5}`:  "invalid arguments: query must be a string",
+	} {
+		res, rerr := s.callTool(context.Background(), "show", json.RawMessage(args))
+		if rerr != nil {
+			t.Fatalf("%s: rpc error %v", args, rerr)
+		}
+		m := res.(map[string]any)
+		text := m["content"].([]map[string]any)[0]["text"].(string)
+		if m["isError"] != true || text != want {
+			t.Errorf("%s: got %q (isError=%v), want %q", args, text, m["isError"], want)
+		}
+		if strings.Contains(text, "Go") || strings.Contains(text, "int64") {
+			t.Errorf("%s: leaks Go internals: %q", args, text)
+		}
+	}
+}
+
+func TestJSONTypeName(t *testing.T) {
+	for k, want := range map[reflect.Kind]string{
+		reflect.Int: "an integer", reflect.Int64: "an integer", reflect.Uint32: "an integer",
+		reflect.Float64: "a number", reflect.Bool: "a boolean", reflect.String: "a string",
+		reflect.Slice: "an array", reflect.Map: "an object", reflect.Struct: "an object",
+	} {
+		if got := jsonTypeName(k); got != want {
+			t.Errorf("%v: got %q, want %q", k, got, want)
+		}
 	}
 }
