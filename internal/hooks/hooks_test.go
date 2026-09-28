@@ -328,6 +328,32 @@ func TestCursorSingleRoot(t *testing.T) {
 	}
 }
 
+// A wrong-typed element in workspace_roots must not be saved as an empty root.
+func TestCursorWrongTypedRootDropped(t *testing.T) {
+	repo := gitRepo(t)
+	open, path := tempDB(t)
+	_, o := runCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{
+		"workspace_roots": []any{repo, 5}}), open)
+	if o.Continue {
+		t.Fatalf("got %+v", o)
+	}
+	e := entries(t, path)[0]
+	if e.Cwd != repo || strings.Contains(string(e.Metadata), "workspace_roots") {
+		t.Fatalf("one real root must be the cwd, with no empty root recorded: cwd=%q meta=%s", e.Cwd, e.Metadata)
+	}
+
+	open, path = tempDB(t)
+	runCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{
+		"workspace_roots": []any{"/repo", 5, "/other"}}), open)
+	var meta struct {
+		Roots []string `json:"workspace_roots"`
+	}
+	e = entries(t, path)[0]
+	if err := json.Unmarshal(e.Metadata, &meta); err != nil || len(meta.Roots) != 2 || meta.Roots[0] != "/repo" || meta.Roots[1] != "/other" {
+		t.Fatalf("roots = %v (%v), want [/repo /other]", meta.Roots, err)
+	}
+}
+
 func TestCursorMultiRoot(t *testing.T) {
 	a, b := gitRepo(t), gitRepo(t)
 	open, path := tempDB(t)

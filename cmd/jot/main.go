@@ -47,6 +47,10 @@ Environment:
 `
 
 func main() {
+	// If a reader closes its end, a write to stdout must fail with EPIPE rather
+	// than kill the process with SIGPIPE: hooks always exit 0, and jot mcp and
+	// the CLI shut down through their normal error paths.
+	signal.Ignore(syscall.SIGPIPE)
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "hook" {
 		os.Exit(runHook(args[1:], os.Stdin, os.Stdout, os.Stderr))
@@ -64,9 +68,6 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (code int
 			fmt.Fprintln(stderr, "jot hook: internal error:", r)
 		}
 	}()
-	// If the host stops reading, a write to stdout must fail with EPIPE rather
-	// than kill the process with SIGPIPE: the hook always exits 0.
-	signal.Ignore(syscall.SIGPIPE)
 	if len(args) != 1 {
 		fmt.Fprintln(stderr, "usage: jot hook claude|cursor")
 		return 0

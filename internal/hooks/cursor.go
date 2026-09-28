@@ -51,6 +51,14 @@ func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 	if in.GenerationID != "" {
 		meta["generation_id"] = in.GenerationID
 	}
+	// A wrong-typed element decodes as ""; don't record roots that weren't sent.
+	roots := in.WorkspaceRoots[:0:0]
+	for _, r := range in.WorkspaceRoots {
+		if r != "" {
+			roots = append(roots, r)
+		}
+	}
+	in.WorkspaceRoots = roots
 	var cwd string
 	switch len(in.WorkspaceRoots) {
 	case 0:

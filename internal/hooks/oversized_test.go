@@ -154,3 +154,30 @@ func TestTooLargeReportsUnroundedLimit(t *testing.T) {
 		t.Fatalf("got %q", msg)
 	}
 }
+
+// Oversized payloads follow the same wrong-type rule as decodePayload: a
+// wrong-typed prompt or event is ignored, not a reason to pass the jot through.
+func TestOversizedWrongTypedFields(t *testing.T) {
+	smallLimit(t)
+	padString := padString()
+	jot := `"prompt":">> secret"`
+	for name, payload := range map[string][]byte{
+		"event number":          big(t, `"hook_event_name":5`, jot, padString),
+		"event after pad":       big(t, jot, padString, `"hook_event_name":{"a":1}`),
+		"extra wrong prompt":    big(t, jot, padString, `"Prompt":[1,2]`),
+		"wrong prompt then jot": big(t, `"prompt":42`, padString, jot),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, b := runClaude(t, payload, neverOpen(t)); b == nil || b.Decision != "block" {
+				t.Fatalf("claude: oversized jot must be blocked, got %+v", b)
+			}
+			if _, o := runCursor(t, payload, neverOpen(t)); o.Continue {
+				t.Fatalf("cursor: oversized jot must be blocked, got %+v", o)
+			}
+		})
+	}
+	// A prompt that is only ever the wrong type is not a jot.
+	if out, _ := runClaude(t, big(t, `"prompt":[">> x"]`, padString), neverOpen(t)); out != "" {
+		t.Fatalf("wrong-typed prompt must pass through, got %q", out)
+	}
+}

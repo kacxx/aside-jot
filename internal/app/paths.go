@@ -62,10 +62,9 @@ func DataDir() (string, error) {
 func BusyTimeout() time.Duration {
 	if v := os.Getenv("JOT_BUSY_TIMEOUT_MS"); v != "" {
 		if ms, err := strconv.ParseInt(v, 10, 64); err == nil && ms >= 0 {
-			if ms > MaxBusyTimeout.Milliseconds() {
-				return MaxBusyTimeout
-			}
-			return time.Duration(ms) * time.Millisecond
+			// Compare in milliseconds before converting, so huge values can't
+			// overflow time.Duration.
+			return time.Duration(min(ms, MaxBusyTimeout.Milliseconds())) * time.Millisecond
 		}
 	}
 	return DefaultBusyTimeout
