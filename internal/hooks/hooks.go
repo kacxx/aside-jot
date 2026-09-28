@@ -63,7 +63,8 @@ func readPayload(r io.Reader) payload {
 
 // scanPrompt streams a JSON object and returns its top-level "prompt" and
 // "hook_event_name" strings, matching json.Unmarshal: keys compare
-// case-insensitively and the last one wins. Other values are skipped token by
+// case-insensitively, the last one wins, and a value of the wrong type is
+// ignored. Other values are skipped token by
 // token, so memory is bounded by the largest single token, not the payload.
 // Malformed input yields "", "", like a malformed payload that fits in memory.
 func scanPrompt(r io.Reader) (prompt, event string) {
@@ -85,7 +86,11 @@ func scanPrompt(r io.Reader) (prompt, event string) {
 		default:
 			err = skipValue(dec)
 		}
-		if err != nil {
+		// A wrong-typed prompt or event is skipped, as decodePayload does for
+		// payloads that fit in memory: Decode has consumed the value and left
+		// the previous one in place.
+		var typeErr *json.UnmarshalTypeError
+		if err != nil && !errors.As(err, &typeErr) {
 			return "", ""
 		}
 	}
