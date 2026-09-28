@@ -65,6 +65,16 @@ func TestBusyTimeout(t *testing.T) {
 	if BusyTimeout() != 2*time.Second {
 		t.Error("invalid falls back")
 	}
+	for _, v := range []string{"10001", "65000", "99999999999999999"} {
+		t.Setenv("JOT_BUSY_TIMEOUT_MS", v)
+		if got := BusyTimeout(); got != MaxBusyTimeout {
+			t.Errorf("%s: got %v, want the %v cap", v, got, MaxBusyTimeout)
+		}
+	}
+	t.Setenv("JOT_BUSY_TIMEOUT_MS", "999999999999999999999") // overflows int64
+	if BusyTimeout() != DefaultBusyTimeout {
+		t.Error("unparseable falls back")
+	}
 }
 
 func TestServiceFlow(t *testing.T) {
