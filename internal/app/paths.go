@@ -12,6 +12,12 @@ import (
 // DefaultBusyTimeout is used when $JOT_BUSY_TIMEOUT_MS is unset or invalid.
 const DefaultBusyTimeout = 2000 * time.Millisecond
 
+// MaxBusyTimeout caps $JOT_BUSY_TIMEOUT_MS. A capture waits up to twice this
+// (open, then insert) plus git lookup; the cap keeps that well inside Claude
+// Code's 30 s UserPromptSubmit hook timeout, since a hook the host kills can
+// no longer block the jot.
+const MaxBusyTimeout = 10 * time.Second
+
 // DBPath resolves the database path: $JOT_DB, else $XDG_DATA_HOME/jot/jot.db,
 // else the OS per-user data directory.
 func DBPath() (string, error) {
@@ -51,11 +57,14 @@ func DataDir() (string, error) {
 	}
 }
 
-// BusyTimeout reads $JOT_BUSY_TIMEOUT_MS, defaulting to 2000ms.
+// BusyTimeout reads $JOT_BUSY_TIMEOUT_MS, defaulting to 2000ms and capped at
+// MaxBusyTimeout.
 func BusyTimeout() time.Duration {
 	if v := os.Getenv("JOT_BUSY_TIMEOUT_MS"); v != "" {
-		if ms, err := strconv.Atoi(v); err == nil && ms >= 0 {
-			return time.Duration(ms) * time.Millisecond
+		if ms, err := strconv.ParseInt(v, 10, 64); err == nil && ms >= 0 {
+			// Compare in milliseconds before converting, so huge values can't
+			// overflow time.Duration.
+			return time.Duration(min(ms, MaxBusyTimeout.Milliseconds())) * time.Millisecond
 		}
 	}
 	return DefaultBusyTimeout

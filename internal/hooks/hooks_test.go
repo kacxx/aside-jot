@@ -328,6 +328,32 @@ func TestCursorSingleRoot(t *testing.T) {
 	}
 }
 
+// A wrong-typed element in workspace_roots must not be saved as an empty root.
+func TestCursorWrongTypedRootDropped(t *testing.T) {
+	repo := gitRepo(t)
+	open, path := tempDB(t)
+	_, o := runCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{
+		"workspace_roots": []any{repo, 5}}), open)
+	if o.Continue {
+		t.Fatalf("got %+v", o)
+	}
+	e := entries(t, path)[0]
+	if e.Cwd != repo || strings.Contains(string(e.Metadata), "workspace_roots") {
+		t.Fatalf("one real root must be the cwd, with no empty root recorded: cwd=%q meta=%s", e.Cwd, e.Metadata)
+	}
+
+	open, path = tempDB(t)
+	runCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{
+		"workspace_roots": []any{"/repo", 5, "/other"}}), open)
+	var meta struct {
+		Roots []string `json:"workspace_roots"`
+	}
+	e = entries(t, path)[0]
+	if err := json.Unmarshal(e.Metadata, &meta); err != nil || len(meta.Roots) != 2 || meta.Roots[0] != "/repo" || meta.Roots[1] != "/other" {
+		t.Fatalf("roots = %v (%v), want [/repo /other]", meta.Roots, err)
+	}
+}
+
 func TestCursorMultiRoot(t *testing.T) {
 	a, b := gitRepo(t), gitRepo(t)
 	open, path := tempDB(t)
@@ -354,4 +380,59 @@ func TestCursorFailureBlocks(t *testing.T) {
 		t.Fatal("a recognised jot must be blocked even on failure")
 	}
 	assertBlockedFailed(t, o.UserMessage, ">> orders pagination should probably be cursor-based, not offset")
+}
+
+// A field of the wrong JSON type must not let a jot through: the payload is
+// still well-formed, the prompt is still a jot, and it is saved with the
+// metadata that did decode.
+func TestWrongTypedFieldsStillBlock(t *testing.T) {
+	t.Run("claude", func(t *testing.T) {
+		for name, override := range map[string]map[string]any{
+			"session_id":      {"session_id": 123},
+			"cwd":             {"cwd": []int{1}},
+			"transcript_path": {"transcript_path": false},
+			"hook_event_name": {"hook_event_name": 5},
+		} {
+			t.Run(name, func(t *testing.T) {
+				open, path := tempDB(t)
+				_, b := runClaude(t, fixture(t, "claude", "capture", override), open)
+				assertBlockedOK(t, b, 1)
+				e := entries(t, path)[0]
+				if e.Text != "token cache TTL looks too long, check with infra before shipping" || e.Source != "claude" {
+					t.Fatalf("entry: %+v", e)
+				}
+				if name != "session_id" && e.SessionID != "3f1c2a9e-7b4d-4e0a-9c55-0d2f8e6b1a47" {
+					t.Fatalf("well-typed session_id lost: %+v", e)
+				}
+			})
+		}
+	})
+	t.Run("cursor", func(t *testing.T) {
+		for name, override := range map[string]map[string]any{
+			"conversation_id":        {"conversation_id": 7},
+			"generation_id":          {"generation_id": []string{"x"}},
+			"workspace_roots string": {"workspace_roots": "/x"},
+			"workspace_roots ints":   {"workspace_roots": []int{1}},
+			"hook_event_name":        {"hook_event_name": true},
+		} {
+			t.Run(name, func(t *testing.T) {
+				open, path := tempDB(t)
+				_, o := runCursor(t, fixture(t, "cursor", "capture_single_root", override), open)
+				if o.Continue || o.UserMessage != "✓ Jotted #1" {
+					t.Fatalf("got %+v", o)
+				}
+				if e := entries(t, path)[0]; e.Source != "cursor" || e.Text != "orders pagination should probably be cursor-based, not offset" {
+					t.Fatalf("entry: %+v", e)
+				}
+			})
+		}
+	})
+	t.Run("prompt itself wrong type passes through", func(t *testing.T) {
+		if out, _ := runClaude(t, []byte(`{"session_id":1,"prompt":[">> x"]}`), neverOpen(t)); out != "" {
+			t.Fatalf("got %q", out)
+		}
+		if _, o := runCursor(t, []byte(`{"workspace_roots":"/x","prompt":{"a":">> x"}}`), neverOpen(t)); !o.Continue {
+			t.Fatalf("got %+v", o)
+		}
+	})
 }
