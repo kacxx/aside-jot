@@ -18,11 +18,11 @@ type CodexBlock struct {
 // Codex adds plain stdout to the model's context as developer context.
 func Codex(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	return promptHook{
-		source: "codex",
+		event: "UserPromptSubmit",
 		block: func(reason string) any {
 			return CodexBlock{Decision: "block", Reason: reason}
 		},
-		meta: func(in PromptInput) map[string]any {
+		parse: parsePrompt("codex", func(in PromptInput) map[string]any {
 			m := map[string]any{}
 			if in.TurnID != "" {
 				m["turn_id"] = in.TurnID
@@ -34,6 +34,6 @@ func Codex(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error
 				return nil
 			}
 			return m
-		},
+		}),
 	}.run(ctx, r, w, open)
 }

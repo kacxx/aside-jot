@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"github.com/kacxx/aside-jot/internal/app"
-	"github.com/kacxx/aside-jot/internal/capture"
 )
 
 // CursorInput is the subset of the beforeSubmitPrompt payload jot uses.
@@ -23,30 +22,25 @@ type CursorOutput struct {
 	UserMessage string `json:"user_message,omitempty"`
 }
 
-// Cursor handles a Cursor beforeSubmitPrompt hook.
+// Cursor handles a Cursor beforeSubmitPrompt hook. Unlike Claude Code and
+// Codex, Cursor expects a reply on every prompt, so pass-through answers
+// {"continue":true}.
 func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
-	p := readPayload(r)
-	if p.oversized {
-		if p.event != "" && p.event != "beforeSubmitPrompt" {
-			return writeJSON(w, CursorOutput{Continue: true})
-		}
-		if _, ok := capture.Match(p.prompt); ok {
-			return writeJSON(w, CursorOutput{Continue: false, UserMessage: tooLarge(p.prompt)})
-		}
-		return writeJSON(w, CursorOutput{Continue: true})
-	}
-	var in CursorInput
-	if err := decodePayload(p.data, &in); err != nil {
-		return writeJSON(w, CursorOutput{Continue: true})
-	}
-	if in.HookEventName != "" && in.HookEventName != "beforeSubmitPrompt" {
-		return writeJSON(w, CursorOutput{Continue: true})
-	}
-	text, ok := capture.Match(in.Prompt)
-	if !ok {
-		return writeJSON(w, CursorOutput{Continue: true})
-	}
+	return promptHook{
+		event: "beforeSubmitPrompt",
+		pass:  CursorOutput{Continue: true},
+		block: func(reason string) any {
+			return CursorOutput{Continue: false, UserMessage: reason}
+		},
+		parse: parseCursor,
+	}.run(ctx, r, w, open)
+}
 
+func parseCursor(data []byte) (event, prompt string, req app.CaptureRequest, err error) {
+	var in CursorInput
+	if err := decodePayload(data, &in); err != nil {
+		return "", "", req, err
+	}
 	meta := map[string]any{}
 	if in.GenerationID != "" {
 		meta["generation_id"] = in.GenerationID
@@ -58,22 +52,19 @@ func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 			roots = append(roots, r)
 		}
 	}
-	in.WorkspaceRoots = roots
 	var cwd string
-	switch len(in.WorkspaceRoots) {
+	switch len(roots) {
 	case 0:
 	case 1:
-		cwd = in.WorkspaceRoots[0]
+		cwd = roots[0]
 	default:
 		// Several roots: record them all rather than guess which one is meant.
-		meta["workspace_roots"] = in.WorkspaceRoots
+		meta["workspace_roots"] = roots
 	}
-	msg := save(ctx, open, app.CaptureRequest{
-		Text:      text,
+	return in.HookEventName, in.Prompt, app.CaptureRequest{
 		Source:    "cursor",
 		SessionID: in.ConversationID,
 		Cwd:       cwd,
 		Metadata:  meta,
-	}, in.Prompt)
-	return writeJSON(w, CursorOutput{Continue: false, UserMessage: msg})
+	}, nil
 }
