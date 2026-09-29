@@ -91,7 +91,9 @@ func TestCodexCaptureMinimalPayload(t *testing.T) {
 	if b == nil || b.Reason != "✓ Jotted #1" {
 		t.Fatalf("got %+v", b)
 	}
-	if e := entries(t, path)[0]; e.Source != "codex" || e.Text != "bare" || len(e.Metadata) != 0 && string(e.Metadata) != "null" {
+	// With no turn_id or model there is no metadata; the store reads an empty
+	// object back as nil.
+	if e := entries(t, path)[0]; e.Source != "codex" || e.Text != "bare" || len(e.Metadata) != 0 {
 		t.Fatalf("entry: %+v metadata=%s", e, e.Metadata)
 	}
 }
