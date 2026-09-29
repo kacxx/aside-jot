@@ -1,4 +1,4 @@
-# aside
+# aside-jot
 
 A side channel for thoughts while you work with coding agents.
 
