@@ -216,6 +216,9 @@ func cmdPaths(w io.Writer) error {
 	fmt.Fprintf(w, "busy timeout: %s\n", app.BusyTimeout())
 	exe, err := os.Executable()
 	if err != nil {
+		// Still exit 0: the data paths above are the main output.
+		fmt.Fprintf(w, "binary:       unknown (%v)\n", err)
+		fmt.Fprintln(w, "warning:      could not check which 'aside' is on PATH")
 		return nil
 	}
 	fmt.Fprintf(w, "binary:       %s\n", exe)
@@ -233,9 +236,15 @@ func pathWarning(exe string, lookPath func(string) (string, error)) string {
 	if err != nil {
 		return fmt.Sprintf("'aside' is not on PATH; use %s in hook and MCP configs", exe)
 	}
-	fi, err1 := os.Stat(found)
-	fe, err2 := os.Stat(exe)
-	if err1 != nil || err2 != nil || !os.SameFile(fi, fe) {
+	fi, err := os.Stat(found)
+	if err != nil {
+		return fmt.Sprintf("could not check 'aside' on PATH (%v); use %s in hook and MCP configs", err, exe)
+	}
+	fe, err := os.Stat(exe)
+	if err != nil {
+		return fmt.Sprintf("could not check this binary (%v); use %s in hook and MCP configs", err, exe)
+	}
+	if !os.SameFile(fi, fe) {
 		return fmt.Sprintf("'aside' on PATH is %s, not this binary; use %s in hook and MCP configs", found, exe)
 	}
 	return ""
