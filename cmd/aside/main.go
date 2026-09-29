@@ -37,7 +37,8 @@ Usage:
   aside done <id>            mark a jot as done
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
-  aside hook claude|cursor   run as a prompt hook (reads the payload on stdin)
+  aside hook claude|codex|cursor
+                             run as a prompt hook (reads the payload on stdin)
   aside mcp                  run the read-only MCP server on stdio
   aside version
 
@@ -71,17 +72,19 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (code int
 		}
 	}()
 	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: aside hook claude|cursor")
+		fmt.Fprintln(stderr, "usage: aside hook claude|codex|cursor")
 		return 0
 	}
 	var h func(context.Context, io.Reader, io.Writer, app.Opener) error
 	switch args[0] {
 	case "claude":
 		h = hooks.Claude
+	case "codex":
+		h = hooks.Codex
 	case "cursor":
 		h = hooks.Cursor
 	default:
-		fmt.Fprintf(stderr, "aside hook: unknown agent %q (want claude or cursor)\n", args[0])
+		fmt.Fprintf(stderr, "aside hook: unknown agent %q (want claude, codex or cursor)\n", args[0])
 		return 0
 	}
 	if err := h(context.Background(), stdin, stdout, app.OpenDefault); err != nil {
