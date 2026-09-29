@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestCLIFlow(t *testing.T) {
 		t.Helper()
 		var out bytes.Buffer
 		if err := run(args, strings.NewReader(stdin), &out); err != nil {
-			t.Fatalf("jot %v: %v", args, err)
+			t.Fatalf("aside %v: %v", args, err)
 		}
 		return out.String()
 	}
@@ -89,5 +90,45 @@ func TestBackupReportsAbsolutePath(t *testing.T) {
 	}
 	if _, err := os.Stat(want); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// paths warns when a bare "aside" would not run this binary, as on macOS
+// where an unrelated tool could shadow it (issue #6).
+func TestPathWarning(t *testing.T) {
+	dir := t.TempDir()
+	self := filepath.Join(dir, "self")
+	other := filepath.Join(dir, "other")
+	for _, p := range []string{self, other} {
+		if err := os.WriteFile(p, nil, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	look := func(found string, err error) func(string) (string, error) {
+		return func(name string) (string, error) {
+			if name != "aside" {
+				t.Errorf("looked up %q", name)
+			}
+			return found, err
+		}
+	}
+
+	if got := pathWarning(self, look(self, nil)); got != "" {
+		t.Errorf("same binary: %q", got)
+	}
+	if got := pathWarning(self, look(other, nil)); !strings.Contains(got, other) || !strings.Contains(got, "use "+self) {
+		t.Errorf("shadowed: %q", got)
+	}
+	if got := pathWarning(self, look("", exec.ErrNotFound)); !strings.Contains(got, "not on PATH") || !strings.Contains(got, self) {
+		t.Errorf("missing: %q", got)
+	}
+	// A file that can't be stat'ed is reported as unchecked, not as a
+	// different binary.
+	gone := filepath.Join(dir, "gone")
+	if got := pathWarning(self, look(gone, nil)); !strings.Contains(got, "could not check 'aside' on PATH") || !strings.Contains(got, "use "+self) {
+		t.Errorf("PATH entry vanished: %q", got)
+	}
+	if got := pathWarning(gone, look(self, nil)); !strings.Contains(got, "could not check this binary") || !strings.Contains(got, "use "+gone) {
+		t.Errorf("binary vanished: %q", got)
 	}
 }

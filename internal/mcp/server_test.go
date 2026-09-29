@@ -83,7 +83,7 @@ func TestSession(t *testing.T) {
 	if err := json.Unmarshal(rs[0].Result, &init); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	if init.ProtocolVersion != "2025-06-18" || init.ServerInfo.Name != "jot" || init.Capabilities["tools"] == nil {
+	if init.ProtocolVersion != "2025-06-18" || init.ServerInfo.Name != "aside" || init.Capabilities["tools"] == nil {
 		t.Errorf("initialize: %s", rs[0].Result)
 	}
 
