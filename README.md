@@ -132,7 +132,10 @@ cloud tasks and ordinary ChatGPT conversations don't run them.
 Not yet verified against a real Codex session: whether a blocked prompt still
 appears in Codex's session history, and whether anything sees the prompt before
 the hook runs (as Claude Code's session-title model does, above). The
-`commandWindows` path is also untested.
+`commandWindows` path is also untested, as is the exact `hook_event_name`
+Codex sends: the hook expects the documented `UserPromptSubmit` and passes
+anything else through, so a different value would let jots reach the model.
+The `>> test` check above catches that.
 
 ## Cursor hook
 
