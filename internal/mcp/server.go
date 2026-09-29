@@ -178,7 +178,7 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 		return map[string]any{
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "jot", "version": s.version},
+			"serverInfo":      map[string]any{"name": "aside", "version": s.version},
 			"instructions": "Read-only access to the user's jot inbox: side-channel notes they " +
 				"captured while working. You cannot create jots; only the user can.",
 		}, nil
