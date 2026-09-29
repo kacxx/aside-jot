@@ -1,4 +1,4 @@
-# aside — `jot`
+# aside
 
 A side channel for thoughts while you work with coding agents.
 
@@ -11,35 +11,50 @@ model never sees it. Your flow isn't interrupted and the agent's context stays c
 ✓ Jotted #12
 ```
 
-Later you can review your notes from the terminal (`jot inbox`), or let an agent read
+Later you can review your notes from the terminal (`aside inbox`), or let an agent read
 them through the read-only MCP server.
 
-![jot demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "jot done" clears it](docs/demo.gif)
+![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "jot done" clears it](docs/demo.gif)
 
-*Recorded with the real Claude Code CLI; Claude's replies are live, so their wording varies between runs.*
+*Recorded with the real Claude Code CLI; Claude's replies are live, so their wording varies between runs. The recording predates the rename of the command from `jot` to `aside`.*
 
 ## Install
 
 Requires Go 1.25+. No cgo: SQLite is pure Go (`modernc.org/sqlite`).
 
 ```sh
-go install github.com/kacxx/aside-jot/cmd/jot@latest
+go install github.com/kacxx/aside-jot/cmd/aside@latest
 ```
 
 or from a checkout:
 
 ```sh
-go install ./cmd/jot
+go install ./cmd/aside
 ```
 
-Check where it will store data:
+This installs `aside` into `$(go env GOPATH)/bin` (usually `~/go/bin`). Check
+where it will store data and where the binary is:
 
 ```sh
-jot paths
+"$(go env GOPATH)/bin/aside" paths
 ```
 
-GUI editors often run hooks with a minimal `PATH`. If `jot` lives in `~/go/bin`,
-use the absolute path (`which jot`) in the configs below.
+```
+db:           /Users/you/Library/Application Support/jot/jot.db (default)
+busy timeout: 2s
+binary:       /Users/you/go/bin/aside
+```
+
+**Use the absolute `binary:` path in the hook and MCP configs below**, shown
+here as `/Users/you/go/bin/aside`. GUI editors often run hooks with a minimal
+`PATH`, and a bare command name runs whatever is found first on that `PATH`.
+`aside paths` prints a warning if `aside` on your `PATH` is missing or is a
+different program.
+
+> The command used to be called `jot`, which on macOS and the BSDs is shadowed
+> by the system's `/usr/bin/jot` (a number-sequence tool) and made the hooks
+> run the wrong program. If you installed it under that name, see
+> [Upgrading from `jot`](#upgrading-from-jot).
 
 ## Claude Code hook
 
@@ -51,7 +66,7 @@ Add to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "jot hook claude" }
+          { "type": "command", "command": "/Users/you/go/bin/aside hook claude" }
         ]
       }
     ]
@@ -65,7 +80,7 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
-Known Claude Code behaviour, outside jot's control (seen with v2.1.283):
+Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
 - `suppressOriginalPrompt` is ignored, so the block message repeats your jot
   as "Original prompt: >> …". Only you see it; the model does not.
@@ -83,7 +98,7 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
   "version": 1,
   "hooks": {
     "beforeSubmitPrompt": [
-      { "command": "jot hook cursor" }
+      { "command": "/Users/you/go/bin/aside hook cursor" }
     ]
   }
 }
@@ -92,13 +107,13 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
 the session. With a single workspace root, that root is used as the working
-directory. With several roots, jot doesn't guess: it records all of them in
+directory. With several roots, aside doesn't guess: it records all of them in
 the entry's metadata and leaves the git fields empty.
 
 ## MCP server (read-only)
 
 ```sh
-claude mcp add --scope user jot -- jot mcp
+claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp
 ```
 
 Tools: `inbox`, `show`, `search`. There is intentionally **no capture tool**:
@@ -124,7 +139,7 @@ space or a backslash.
 ### Failure behaviour
 
 - **Ordinary prompts and malformed hook payloads fail open**: the prompt goes
-  through as if jot weren't installed. The prefix is checked *before* SQLite is
+  through as if aside weren't installed. The prefix is checked *before* SQLite is
   opened or git is run, so a normal prompt costs one small process start.
 - **A recognised jot fails safe**: it is always blocked, even if saving failed.
   On failure the message says `✗ Jot NOT saved (<reason>)` and includes your
@@ -137,15 +152,15 @@ space or a backslash.
 ## CLI
 
 ```
-jot add <text...>        capture from the terminal (reads stdin if no text)
-jot inbox [-n N]         newest inbox jots (default 20, 0 = all)
-jot show <id>            one jot with its context
-jot search <query...>    substring search over all jots
-jot done <id>            mark done (drops out of the inbox)
-jot backup <path>        consistent copy via VACUUM INTO; never overwrites
-jot paths                where the data lives
-jot hook claude|cursor   hook entry points
-jot mcp                  read-only MCP server on stdio
+aside add <text...>        capture from the terminal (reads stdin if no text)
+aside inbox [-n N]         newest inbox jots (default 20, 0 = all)
+aside show <id>            one jot with its context
+aside search <query...>    substring search over all jots
+aside done <id>            mark done (drops out of the inbox)
+aside backup <path>        consistent copy via VACUUM INTO; never overwrites
+aside paths                where the data and binary live; warns about PATH
+aside hook claude|cursor   hook entry points
+aside mcp                  read-only MCP server on stdio
 ```
 
 ## Storage
@@ -157,10 +172,12 @@ commit_sha, metadata` (JSON).
 - Path: `$JOT_DB`, else `$XDG_DATA_HOME/jot/jot.db`, else the OS per-user data
   directory (`~/.local/share/jot`, `~/Library/Application Support/jot`,
   `%LOCALAPPDATA%\jot`).
+  The data directory and the `JOT_*` variables kept their names when the
+  command was renamed, so an existing database is picked up unchanged.
 - The database, its `-wal`/`-shm` files and backups are owner-only (`0600`)
   on Unix, whatever the umask, including when `$JOT_DB` points somewhere
   shared like `/tmp`. An existing database with wider permissions is tightened
-  when jot opens it.
+  when aside opens it.
 - WAL mode and `busy_timeout` are set on every connection.
   `$JOT_BUSY_TIMEOUT_MS` (default 2000, capped at 10000) is how long each
   database step of a capture (opening, then the insert) waits on a locked
@@ -170,13 +187,29 @@ commit_sha, metadata` (JSON).
 - Git context is best-effort, with a ~750ms budget. A detached HEAD records the
   commit but no branch. Outside a repo, the git fields are empty.
 
+## Upgrading from `jot`
+
+The command was renamed from `jot` to `aside` because macOS and the BSDs ship
+an unrelated `/usr/bin/jot` that usually comes first on `PATH`
+([#6](https://github.com/kacxx/aside-jot/issues/6)). Your notes stay where they
+are; only the commands change.
+
+1. Install `aside` as above and run `"$(go env GOPATH)/bin/aside" paths`.
+   The `db:` line should show your existing database.
+2. In `~/.claude/settings.json`, `~/.cursor/hooks.json` and your MCP config,
+   replace the `jot` command with the absolute `binary:` path, for example
+   `/Users/you/go/bin/aside hook claude`. For the MCP server:
+   `claude mcp remove --scope user jot`, then add it again as shown above.
+3. Remove the old binary: `rm "$(go env GOPATH)/bin/jot"` (on macOS this
+   leaves the system `/usr/bin/jot` alone).
+
 ## Not in v1 (on purpose)
 
 - **Triage**: no priorities, tags, snoozing or workflows beyond `inbox`/`done`.
 - **Promote**: no turning jots into issues, TODOs or tasks.
 - **Classification**: no automatic categorising or summarising, and no LLM in
   the loop.
-- **Sync**: local SQLite file only; use `jot backup` to copy it.
+- **Sync**: local SQLite file only; use `aside backup` to copy it.
 - **UI**: CLI and MCP only.
 
 The MVP proves one thing: capturing is instant, reliable and invisible to the
