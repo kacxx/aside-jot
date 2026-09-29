@@ -14,6 +14,10 @@ model never sees it. Your flow isn't interrupted and the agent's context stays c
 Later you can review your notes from the terminal (`jot inbox`), or let an agent read
 them through the read-only MCP server.
 
+![jot demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "jot done" clears it](docs/demo.gif)
+
+*Recorded with the real Claude Code CLI; Claude's replies are live, so their wording varies between runs.*
+
 ## Install
 
 Requires Go 1.25+. No cgo: SQLite is pure Go (`modernc.org/sqlite`).
