@@ -60,12 +60,12 @@ func TestHookAlwaysExitsZero(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, args := range [][]string{{}, {"nope"}, {"claude"}, {"cursor"}} {
+	for _, args := range [][]string{{}, {"nope"}, {"claude"}, {"codex"}, {"cursor"}} {
 		var out, errb bytes.Buffer
 		if code := runHook(args, strings.NewReader(`{"prompt":">> x"}`), &out, &errb); code != 0 {
 			t.Errorf("hook %v exited %d", args, code)
 		}
-		if len(args) == 1 && (args[0] == "claude" || args[0] == "cursor") && !strings.Contains(out.String(), "NOT saved") {
+		if len(args) == 1 && args[0] != "nope" && !strings.Contains(out.String(), "NOT saved") {
 			t.Errorf("hook %v: %q", args, out.String())
 		}
 	}
