@@ -1,0 +1,10 @@
+{
+  "session_id": "0199a2c4-5e7b-7f10-8d3a-6b2e9c41f0d8",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/09/29/rollout-2026-09-29T10-14-03-0199a2c4-5e7b-7f10-8d3a-6b2e9c41f0d8.jsonl",
+  "cwd": "/Users/dev/src/webapp",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5-codex",
+  "turn_id": "0199a2c6-8a41-7d03-b7e2-5c0f1a9d3e84",
+  "permission_mode": "default",
+  "prompt": "Add a timeout to the payments client retry loop"
+}

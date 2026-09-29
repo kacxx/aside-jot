@@ -1,0 +1,10 @@
+{
+  "session_id": "0199a2c4-5e7b-7f10-8d3a-6b2e9c41f0d8",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/09/29/rollout-2026-09-29T10-14-03-0199a2c4-5e7b-7f10-8d3a-6b2e9c41f0d8.jsonl",
+  "cwd": "/Users/dev/src/webapp",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5-codex",
+  "turn_id": "0199a2c5-1f22-7c8e-a4b0-93d1e57a2c6f",
+  "permission_mode": "default",
+  "prompt": ">> retry budget in the payments client looks unbounded, check before release"
+}

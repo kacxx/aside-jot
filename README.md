@@ -2,7 +2,7 @@
 
 A side channel for thoughts while you work with coding agents.
 
-Type `>> some thought` into Claude Code or Cursor and it is stored locally with
+Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
 
@@ -89,6 +89,51 @@ Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
   title can be derived from a jot. The conversation model never receives it.
   In the terminal CLI no such request was observed.
 
+## Codex hook
+
+Codex runs local `UserPromptSubmit` hooks. Add to `~/.codex/hooks.json` (or a
+trusted project's `.codex/hooks.json`):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/you/go/bin/aside hook codex",
+            "commandWindows": "C:/Users/you/go/bin/aside.exe hook codex"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Then run `/hooks` in Codex, review the hook and **trust** it.
+
+> **Until the hook is trusted, it does not run, and `>>` prompts go to the
+> model.** Codex only runs a hook whose exact definition you have trusted, so
+> changing the command (for example, a new binary path) needs trusting again in
+> `/hooks`. Hooks can also be switched off with `[features] hooks = false` in
+> `~/.codex/config.toml`. After any change, type `>> test` and check you get
+> `✓ Jotted #N` rather than a model reply.
+
+On a jot, the hook prints `{"decision":"block","reason":"✓ Jotted #N"}` and
+Codex shows you the reason. Every other prompt produces no output at all: Codex
+adds a hook's plain stdout to the model's context. Captures are stored with
+`source: codex`, the Codex session id, and the turn id and model in metadata.
+
+Hooks and local MCP servers apply to local Codex sessions. Codex
+cloud tasks and ordinary ChatGPT conversations don't run them.
+
+Not yet verified against a real Codex session: whether a blocked prompt still
+appears in Codex's session history, and whether anything sees the prompt before
+the hook runs (as Claude Code's session-title model does, above). The
+`commandWindows` path is also untested.
+
 ## Cursor hook
 
 Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
@@ -113,8 +158,22 @@ the entry's metadata and leaves the git fields empty.
 ## MCP server (read-only)
 
 ```sh
-claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp
+claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp   # Claude Code
+codex mcp add aside -- /Users/you/go/bin/aside mcp                 # Codex
+codex mcp list
 ```
+
+For Codex, the same entry in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.aside]
+command = "/Users/you/go/bin/aside"
+args = ["mcp"]
+```
+
+To have Codex check your notes on its own, add a line to your `AGENTS.md`,
+for example: "My side notes are in the `aside` MCP server; check `inbox` when
+starting work on this repo."
 
 Tools: `inbox`, `show`, `search`. There is intentionally **no capture tool**:
 only you write jots, never the model.
@@ -159,7 +218,8 @@ aside search <query...>    substring search over all jots
 aside done <id>            mark done (drops out of the inbox)
 aside backup <path>        consistent copy via VACUUM INTO; never overwrites
 aside paths                where the data and binary live; warns about PATH
-aside hook claude|cursor   hook entry points
+aside hook claude|codex|cursor
+                           hook entry points
 aside mcp                  read-only MCP server on stdio
 ```
 
@@ -182,8 +242,9 @@ commit_sha, metadata` (JSON).
   `$JOT_BUSY_TIMEOUT_MS` (default 2000, capped at 10000) is how long each
   database step of a capture (opening, then the insert) waits on a locked
   database before the jot is reported "NOT saved". The cap keeps a capture well
-  inside Claude Code's 30 s hook timeout: a hook the host kills can't block the
-  jot. If you set a `timeout` on the hook entry, keep it above 25 s.
+  inside Claude Code's 30 s hook timeout (Codex allows 600 s): a hook the host
+  kills can't block the jot. If you set a `timeout` on the hook entry, keep it
+  above 25 s.
 - Git context is best-effort, with a ~750ms budget. A detached HEAD records the
   commit but no branch. Outside a repo, the git fields are empty.
 
