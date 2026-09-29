@@ -32,11 +32,20 @@ or from a checkout:
 go install ./cmd/aside
 ```
 
-This installs `aside` into `$(go env GOPATH)/bin` (usually `~/go/bin`). Check
-where it will store data and where the binary is:
+This installs `aside` into `$(go env GOPATH)/bin` (usually `~/go/bin`; on
+Windows, usually `$env:USERPROFILE\go\bin`). Check where it will store data and
+where the binary is.
+
+macOS, Linux and the BSDs:
 
 ```sh
 "$(go env GOPATH)/bin/aside" paths
+```
+
+Windows PowerShell:
+
+```powershell
+& "$(go env GOPATH)\bin\aside.exe" paths
 ```
 
 ```
@@ -50,6 +59,18 @@ here as `/Users/you/go/bin/aside`. GUI editors often run hooks with a minimal
 `PATH`, and a bare command name runs whatever is found first on that `PATH`.
 `aside paths` prints a warning if `aside` on your `PATH` is missing or is a
 different program.
+
+On Windows, JSON strings must either use forward slashes:
+
+```json
+"command": "C:/Users/you/go/bin/aside.exe hook claude"
+```
+
+or escape every backslash:
+
+```json
+"command": "C:\\Users\\you\\go\\bin\\aside.exe hook claude"
+```
 
 > The command used to be called `jot`, which on macOS and the BSDs is shadowed
 > by the system's `/usr/bin/jot` (a number-sequence tool) and made the hooks
@@ -114,6 +135,12 @@ the entry's metadata and leaves the git fields empty.
 
 ```sh
 claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp
+```
+
+On Windows PowerShell, quote the absolute executable path:
+
+```powershell
+claude mcp add --scope user aside -- "$(go env GOPATH)\bin\aside.exe" mcp
 ```
 
 Tools: `inbox`, `show`, `search`. There is intentionally **no capture tool**:
@@ -194,14 +221,16 @@ an unrelated `/usr/bin/jot` that usually comes first on `PATH`
 ([#6](https://github.com/kacxx/aside-jot/issues/6)). Your notes stay where they
 are; only the commands change.
 
-1. Install `aside` as above and run `"$(go env GOPATH)/bin/aside" paths`.
-   The `db:` line should show your existing database.
+1. Install `aside` and run the `paths` command for your platform from
+   [Install](#install). The `db:` line should show your existing database.
 2. In `~/.claude/settings.json`, `~/.cursor/hooks.json` and your MCP config,
    replace the `jot` command with the absolute `binary:` path, for example
    `/Users/you/go/bin/aside hook claude`. For the MCP server:
    `claude mcp remove --scope user jot`, then add it again as shown above.
-3. Remove the old binary: `rm "$(go env GOPATH)/bin/jot"` (on macOS this
-   leaves the system `/usr/bin/jot` alone).
+3. Remove the old binary. On macOS, Linux and the BSDs, run
+   `rm "$(go env GOPATH)/bin/jot"` (on macOS this leaves the system
+   `/usr/bin/jot` alone). On Windows PowerShell, run
+   `Remove-Item "$(go env GOPATH)\bin\jot.exe"`.
 
 ## Not in v1 (on purpose)
 
