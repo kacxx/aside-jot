@@ -50,6 +50,22 @@ bin/aside hook cursor < testdata/hooks/cursor/capture_multi_root.json
 # {"continue":false,"user_message":"✓ Jotted #3"}   (roots in metadata, no git fields)
 ```
 
+## Codex hook
+
+Ordinary prompts, mid-prompt `>>` and malformed payloads must print **nothing**
+(Codex adds hook stdout to the model's context):
+
+```sh
+for f in normal mid_prompt malformed; do
+  printf '%s: [' $f; bin/aside hook codex < testdata/hooks/codex/$f.json; echo "] exit=$?"
+done
+# normal: [] exit=0
+# mid_prompt: [] exit=0
+# malformed: [] exit=0
+jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/codex/capture.json | bin/aside hook codex
+# {"decision":"block","reason":"✓ Jotted #4"}
+```
+
 ## Failure is safe
 
 ```sh
@@ -85,5 +101,8 @@ essentially process start-up.
 2. In Claude Code, type `>> hello from claude`. You should see `✓ Jotted #N`,
    and the model should not respond.
 3. In Cursor, type `>> hello from cursor`. You should see the same.
-4. Type `what does >> do in bash?`. It must go to the model as normal.
-5. `aside inbox` shows both jots with repo and branch.
+4. In Codex, trust the hook in `/hooks` first, then type `>> hello from codex`.
+   You should see the same, and Codex should not start a turn.
+5. In each tool, type `what does >> do in bash?`. It must go to the model as
+   normal.
+6. `aside inbox` shows the three jots with repo and branch.

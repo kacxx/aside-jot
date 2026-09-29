@@ -1,4 +1,4 @@
-// Package hooks adapts Claude Code and Cursor prompt hooks to jot.
+// Package hooks adapts Claude Code, Codex and Cursor prompt hooks to jot.
 //
 // Contract:
 //   - The prefix check runs before SQLite is opened or git is run; the
