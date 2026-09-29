@@ -122,4 +122,13 @@ func TestPathWarning(t *testing.T) {
 	if got := pathWarning(self, look("", exec.ErrNotFound)); !strings.Contains(got, "not on PATH") || !strings.Contains(got, self) {
 		t.Errorf("missing: %q", got)
 	}
+	// A file that can't be stat'ed is reported as unchecked, not as a
+	// different binary.
+	gone := filepath.Join(dir, "gone")
+	if got := pathWarning(self, look(gone, nil)); !strings.Contains(got, "could not check 'aside' on PATH") || !strings.Contains(got, "use "+self) {
+		t.Errorf("PATH entry vanished: %q", got)
+	}
+	if got := pathWarning(gone, look(self, nil)); !strings.Contains(got, "could not check this binary") || !strings.Contains(got, "use "+gone) {
+		t.Errorf("binary vanished: %q", got)
+	}
 }
