@@ -20,43 +20,66 @@ type PromptInput struct {
 	Model          string `json:"model"`
 }
 
-// promptHook adapts one agent's UserPromptSubmit hook. Pass-through writes
-// nothing: both Claude Code and Codex add hook stdout to the model's context.
+// promptHook adapts one agent's prompt-submit hook. run owns the gating
+// sequence shared by every agent; the adapter only decodes its payload and
+// shapes its replies.
 type promptHook struct {
-	source string
-	block  func(reason string) any             // the agent's blocking output
-	meta   func(in PromptInput) map[string]any // entry metadata; nil for none
+	event string                  // the hook_event_name this hook handles
+	pass  any                     // pass-through reply; nil writes nothing
+	block func(reason string) any // the agent's blocking reply
+
+	// parse decodes a payload that fits in memory. It returns the payload's
+	// event and prompt, and the request to save if the prompt is a jot (Text
+	// is filled in by run). An error means a malformed payload.
+	parse func(data []byte) (event, prompt string, req app.CaptureRequest, err error)
 }
 
 func (h promptHook) run(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	p := readPayload(r)
 	if p.oversized {
-		if p.event != "" && p.event != "UserPromptSubmit" {
-			return nil
+		if p.event != "" && p.event != h.event {
+			return h.passThrough(w)
 		}
 		if _, ok := capture.Match(p.prompt); ok {
 			return writeJSON(w, h.block(tooLarge(p.prompt)))
 		}
-		return nil
+		return h.passThrough(w)
 	}
-	var in PromptInput
-	if err := decodePayload(p.data, &in); err != nil {
-		return nil
+	event, prompt, req, err := h.parse(p.data)
+	if err != nil {
+		return h.passThrough(w)
 	}
-	if in.HookEventName != "" && in.HookEventName != "UserPromptSubmit" {
-		return nil
+	if event != "" && event != h.event {
+		return h.passThrough(w)
 	}
-	text, ok := capture.Match(in.Prompt)
+	text, ok := capture.Match(prompt)
 	if !ok {
+		return h.passThrough(w)
+	}
+	req.Text = text
+	return writeJSON(w, h.block(save(ctx, open, req, prompt)))
+}
+
+func (h promptHook) passThrough(w io.Writer) error {
+	if h.pass == nil {
 		return nil
 	}
+	return writeJSON(w, h.pass)
+}
 
-	msg := save(ctx, open, app.CaptureRequest{
-		Text:      text,
-		Source:    h.source,
-		SessionID: in.SessionID,
-		Cwd:       in.Cwd,
-		Metadata:  h.meta(in),
-	}, in.Prompt)
-	return writeJSON(w, h.block(msg))
+// parsePrompt returns a promptHook parse function for the UserPromptSubmit
+// payload shared by Claude Code and Codex.
+func parsePrompt(source string, meta func(in PromptInput) map[string]any) func([]byte) (string, string, app.CaptureRequest, error) {
+	return func(data []byte) (string, string, app.CaptureRequest, error) {
+		var in PromptInput
+		if err := decodePayload(data, &in); err != nil {
+			return "", "", app.CaptureRequest{}, err
+		}
+		return in.HookEventName, in.Prompt, app.CaptureRequest{
+			Source:    source,
+			SessionID: in.SessionID,
+			Cwd:       in.Cwd,
+			Metadata:  meta(in),
+		}, nil
+	}
 }
