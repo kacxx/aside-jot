@@ -2,3 +2,6 @@ bin/
 *.db
 *.db-wal
 *.db-shm
+
+# local, environment-specific overrides (e.g. corporate proxy CA for the e2e clean room)
+test/e2e/*.pem
