@@ -51,6 +51,24 @@ jobs:
         if: runner.os != 'Linux'
         run: go test ./...
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # End-to-end check of the documented flow against the built binary:
+      # install -> paths -> CLI round-trip -> per-agent hook capture/passthrough
+      # -> MCP initialize. Installs from this checkout and uses a throwaway DB.
+      - name: End-to-end install and hook flow
+        run: bash test/e2e/run.sh
+
   lint:
     runs-on: ubuntu-latest
     steps:
