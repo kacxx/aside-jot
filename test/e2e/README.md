@@ -12,6 +12,10 @@ points end to end:
 4. CLI round-trip — `add` / `inbox` / `search` / `show` / `done`.
 5. hooks — a `>>` prompt is captured and a normal prompt passes through, for
    `claude`, `codex` and `cursor`, printing each agent's exact response schema.
+   Pass-through must be exact: nothing at all for Claude Code and Codex (they
+   add hook output to the model's context), `{"continue":true}` for Cursor.
+   With an unwritable database, a `>>` prompt is still blocked and reported
+   "NOT saved" with the original text, and the hook exits 0.
 6. MCP — a JSON-RPC `initialize` handshake.
 
 The database is redirected to a throwaway path (`JOT_DB` under `mktemp -d`), so
