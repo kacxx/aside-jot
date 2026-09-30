@@ -28,16 +28,24 @@ type promptHook struct {
 	pass  any                     // pass-through reply; nil writes nothing
 	block func(reason string) any // the agent's blocking reply
 
-	// parse decodes a payload that fits in memory. It returns the payload's
-	// event and prompt, and the request to save if the prompt is a jot (Text
-	// is filled in by run). An error means a malformed payload.
-	parse func(data []byte) (event, prompt string, req app.CaptureRequest, err error)
+	// parse decodes a payload that fits in memory into its event and prompt,
+	// plus a build func that constructs the request to save (Text is filled in
+	// by run). build is called only once the prompt is a confirmed jot, so its
+	// metadata allocation stays off the path ordinary prompts take. An error
+	// means a malformed payload.
+	parse func(data []byte) (event, prompt string, build func() app.CaptureRequest, err error)
+}
+
+// eventMatches reports whether a payload's hook_event_name is one this hook
+// should act on. An empty event (the field wasn't sent) is accepted leniently.
+func (h promptHook) eventMatches(event string) bool {
+	return event == "" || event == h.event
 }
 
 func (h promptHook) run(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	p := readPayload(r)
 	if p.oversized {
-		if p.event != "" && p.event != h.event {
+		if !h.eventMatches(p.event) {
 			return h.passThrough(w)
 		}
 		if _, ok := capture.Match(p.prompt); ok {
@@ -45,17 +53,20 @@ func (h promptHook) run(ctx context.Context, r io.Reader, w io.Writer, open app.
 		}
 		return h.passThrough(w)
 	}
-	event, prompt, req, err := h.parse(p.data)
+	event, prompt, build, err := h.parse(p.data)
 	if err != nil {
 		return h.passThrough(w)
 	}
-	if event != "" && event != h.event {
+	if !h.eventMatches(event) {
 		return h.passThrough(w)
 	}
 	text, ok := capture.Match(prompt)
 	if !ok {
 		return h.passThrough(w)
 	}
+	// Build the request (and its metadata) only now that the prompt is a
+	// confirmed jot; an ordinary prompt pays no request or metadata allocation.
+	req := build()
 	req.Text = text
 	return writeJSON(w, h.block(save(ctx, open, req, prompt)))
 }
@@ -69,17 +80,20 @@ func (h promptHook) passThrough(w io.Writer) error {
 
 // parsePrompt returns a promptHook parse function for the UserPromptSubmit
 // payload shared by Claude Code and Codex.
-func parsePrompt(source string, meta func(in PromptInput) map[string]any) func([]byte) (string, string, app.CaptureRequest, error) {
-	return func(data []byte) (string, string, app.CaptureRequest, error) {
+func parsePrompt(source string, meta func(in PromptInput) map[string]any) func([]byte) (string, string, func() app.CaptureRequest, error) {
+	return func(data []byte) (string, string, func() app.CaptureRequest, error) {
 		var in PromptInput
 		if err := decodePayload(data, &in); err != nil {
-			return "", "", app.CaptureRequest{}, err
+			return "", "", nil, err
 		}
-		return in.HookEventName, in.Prompt, app.CaptureRequest{
-			Source:    source,
-			SessionID: in.SessionID,
-			Cwd:       in.Cwd,
-			Metadata:  meta(in),
-		}, nil
+		build := func() app.CaptureRequest {
+			return app.CaptureRequest{
+				Source:    source,
+				SessionID: in.SessionID,
+				Cwd:       in.Cwd,
+				Metadata:  meta(in),
+			}
+		}
+		return in.HookEventName, in.Prompt, build, nil
 	}
 }
