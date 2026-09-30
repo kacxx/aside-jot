@@ -19,5 +19,12 @@ RUN useradd -m tester
 USER tester
 WORKDIR /home/tester
 
+# Reproduce the real first-time-user case: GOPATH under HOME, with ~/go/bin NOT
+# on PATH (the base image only puts the original /go/bin there). This makes the
+# harness assert the "'aside' is not on PATH" situation the README warns about,
+# so the "use the absolute binary path in configs" guidance is tested honestly.
+ENV GOPATH=/home/tester/go
+ENV ASIDE_E2E_EXPECT_NOT_ON_PATH=1
+
 COPY --chown=tester:tester run.sh /home/tester/run.sh
 ENTRYPOINT ["bash", "/home/tester/run.sh"]
