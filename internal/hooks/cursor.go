@@ -36,35 +36,38 @@ func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 	}.run(ctx, r, w, open)
 }
 
-func parseCursor(data []byte) (event, prompt string, req app.CaptureRequest, err error) {
+func parseCursor(data []byte) (event, prompt string, build func() app.CaptureRequest, err error) {
 	var in CursorInput
 	if err := decodePayload(data, &in); err != nil {
-		return "", "", req, err
+		return "", "", nil, err
 	}
-	meta := map[string]any{}
-	if in.GenerationID != "" {
-		meta["generation_id"] = in.GenerationID
-	}
-	// A wrong-typed element decodes as ""; don't record roots that weren't sent.
-	roots := in.WorkspaceRoots[:0:0]
-	for _, r := range in.WorkspaceRoots {
-		if r != "" {
-			roots = append(roots, r)
+	build = func() app.CaptureRequest {
+		meta := map[string]any{}
+		if in.GenerationID != "" {
+			meta["generation_id"] = in.GenerationID
+		}
+		// A wrong-typed element decodes as ""; don't record roots that weren't sent.
+		roots := in.WorkspaceRoots[:0:0]
+		for _, r := range in.WorkspaceRoots {
+			if r != "" {
+				roots = append(roots, r)
+			}
+		}
+		var cwd string
+		switch len(roots) {
+		case 0:
+		case 1:
+			cwd = roots[0]
+		default:
+			// Several roots: record them all rather than guess which one is meant.
+			meta["workspace_roots"] = roots
+		}
+		return app.CaptureRequest{
+			Source:    "cursor",
+			SessionID: in.ConversationID,
+			Cwd:       cwd,
+			Metadata:  meta,
 		}
 	}
-	var cwd string
-	switch len(roots) {
-	case 0:
-	case 1:
-		cwd = roots[0]
-	default:
-		// Several roots: record them all rather than guess which one is meant.
-		meta["workspace_roots"] = roots
-	}
-	return in.HookEventName, in.Prompt, app.CaptureRequest{
-		Source:    "cursor",
-		SessionID: in.ConversationID,
-		Cwd:       cwd,
-		Metadata:  meta,
-	}, nil
+	return in.HookEventName, in.Prompt, build, nil
 }
