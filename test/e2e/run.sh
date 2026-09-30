@@ -68,9 +68,29 @@ for agent in claude codex cursor; do
   CAP="$(printf '{"prompt":">> note via %s","cwd":"%s"}' "$agent" "$TMP" | "$BIN" hook "$agent" 2>&1)"
   echo "  $agent >>     : ${CAP:-<empty>}"
   captured "$CAP" && ok "hook $agent captures a >> prompt" || bad "hook $agent did NOT capture a >> prompt"
-  THRU="$(printf '{"prompt":"just a normal question","cwd":"%s"}' "$TMP" | "$BIN" hook "$agent" 2>&1)"
+  # Pass-through must be exact: Claude Code and Codex add any hook stdout to
+  # the model's context, so they must print nothing; Cursor wants {"continue":true}.
+  THRU="$(printf '{"prompt":"just a normal question","cwd":"%s"}' "$TMP" | "$BIN" hook "$agent" 2>/dev/null)"
   echo "  $agent normal : ${THRU:-<empty>}"
-  captured "$THRU" && bad "hook $agent captured a normal prompt" || ok "hook $agent passes a normal prompt through"
+  case "$agent" in
+    cursor) WANT='{"continue":true}' ;;
+    *)      WANT='' ;;
+  esac
+  [ "$THRU" = "$WANT" ] && ok "hook $agent passes a normal prompt through" \
+                        || bad "hook $agent pass-through printed '${THRU}', want '${WANT:-<nothing>}'"
+done
+
+hr "5b. hooks fail safe: an unwritable database still blocks the jot"
+BROKEN_DB="$TMP/not-a-dir/e2e.db"
+: >"$TMP/not-a-dir"   # a file where the data directory should be
+for agent in claude codex cursor; do
+  OUT="$(printf '{"prompt":">> keep me safe","cwd":"%s"}' "$TMP" | JOT_DB="$BROKEN_DB" "$BIN" hook "$agent" 2>/dev/null)"; CODE=$?
+  echo "  $agent broken : ${OUT:-<empty>} (exit $CODE)"
+  if [ "$CODE" -eq 0 ] && echo "$OUT" | grep -q "NOT saved" && echo "$OUT" | grep -q ">> keep me safe"; then
+    ok "hook $agent blocks and reports NOT saved with the original text, exit 0"
+  else
+    bad "hook $agent did not fail safe on an unwritable database"
+  fi
 done
 
 hr "6. MCP server: JSON-RPC initialize"
