@@ -18,15 +18,15 @@ type ClaudeBlock struct {
 // nothing (any stdout would be added to the model's context).
 func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	return promptHook{
-		source: "claude",
+		event: "UserPromptSubmit",
 		block: func(reason string) any {
 			return ClaudeBlock{Decision: "block", Reason: reason, SuppressOriginalPrompt: true}
 		},
-		meta: func(in PromptInput) map[string]any {
+		parse: parsePrompt("claude", func(in PromptInput) map[string]any {
 			if in.TranscriptPath == "" {
 				return nil
 			}
 			return map[string]any{"transcript_path": in.TranscriptPath}
-		},
+		}),
 	}.run(ctx, r, w, open)
 }
