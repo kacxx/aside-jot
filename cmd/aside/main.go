@@ -27,6 +27,9 @@ import (
 
 var version = "" // set with -ldflags "-X main.version=..."
 
+// promoteRunner runs git and gh for aside promote; tests replace it.
+var promoteRunner app.Runner = app.ExecRunner{}
+
 const usage = `aside — a side channel for thoughts while working with coding agents
 
 Usage:
@@ -35,6 +38,8 @@ Usage:
   aside show <id>            show one jot with its context
   aside search <query...>    search all jots (substring, case-insensitive)
   aside done <id>            mark a jot as done
+  aside promote <id> [--repo owner/name] [--dry-run]
+                             turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
   aside hook claude|codex|cursor
@@ -182,6 +187,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(stdout, "✓ #%d done\n", id)
+	case "promote":
+		return cmdPromote(ctx, svc, args, stdout)
 	case "backup":
 		if len(args) != 1 {
 			return errors.New("usage: aside backup <path>")
@@ -200,6 +207,42 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unknown command %q (run 'aside help')", cmd)
 	}
+	return nil
+}
+
+func cmdPromote(ctx context.Context, svc *app.Service, args []string, w io.Writer) error {
+	fs := flag.NewFlagSet("promote", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	repo := fs.String("repo", "", "target repository, owner/name")
+	dryRun := fs.Bool("dry-run", false, "print the issue without creating it")
+	// Flags may come before or after the id.
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		pos = append(pos, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+	id, err := parseID(pos)
+	if err != nil {
+		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+	}
+	p, err := svc.Promote(ctx, promoteRunner, app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun})
+	if errors.Is(err, app.ErrNotFound) {
+		return fmt.Errorf("no jot #%d", id)
+	}
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s", p.Repo, p.Title, p.Body)
+		return nil
+	}
+	fmt.Fprintln(w, p.URL)
 	return nil
 }
 
@@ -308,6 +351,7 @@ func printEntry(w io.Writer, e app.Entry) {
 	field("root", e.RepoRoot)
 	field("branch", e.Branch)
 	field("commit", e.CommitSHA)
+	field("issue", e.IssueURL)
 	if len(e.Metadata) > 0 {
 		field("metadata", string(e.Metadata))
 	}
