@@ -133,7 +133,9 @@ trusted project's `.codex/hooks.json`):
 }
 ```
 
-Then run `/hooks` in Codex, review the hook and **trust** it.
+Then run `/hooks` in the **Codex CLI**, review the hook and **trust** it. The
+Codex desktop app has no `/hooks` command (it sends `/hooks` to the model as an
+ordinary message), so use the CLI to review hooks.
 
 > **Until the hook is trusted, it does not run, and `>>` prompts go to the
 > model.** Codex only runs a hook whose exact definition you have trusted, so
@@ -150,13 +152,20 @@ adds a hook's plain stdout to the model's context. Captures are stored with
 Hooks and local MCP servers apply to local Codex sessions. Codex
 cloud tasks and ordinary ChatGPT conversations don't run them.
 
-Not yet verified against a real Codex session: whether a blocked prompt still
-appears in Codex's session history, and whether anything sees the prompt before
-the hook runs (as Claude Code's session-title model does, above). The
-`commandWindows` path is also untested, as is the exact `hook_event_name`
-Codex sends: the hook expects the documented `UserPromptSubmit` and passes
-anything else through, so a different value would let jots reach the model.
-The `>> test` check above catches that.
+Verified with Codex CLI v0.159.3 on Windows, using the `commandWindows`
+forward-slash path above:
+
+- A `>>` prompt shows "Blocked by hook ✓ Jotted #N" and the model does not
+  reply. Codex sends `hook_event_name: "UserPromptSubmit"`, as documented.
+- Ordinary prompts reach the model as normal.
+- The jot is stored with `source: codex`, the Codex session id, `cwd`, and the
+  turn id and model in metadata.
+- Codex can read jots through the `aside` MCP server's `inbox` tool.
+
+Not yet verified: whether a blocked prompt still appears in Codex's session
+history, and whether anything sees the prompt before the hook runs (as Claude
+Code's session-title model does, above). Codex reports a few seconds of "Worked
+for" time on a blocked prompt, though no model reply appears.
 
 ## Cursor hook
 
