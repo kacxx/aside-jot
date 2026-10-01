@@ -197,7 +197,7 @@ func ParseRemote(remote string) (string, error) {
 		}
 		path = rest
 	} else {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", redactRemote(remote))
+		return "", remoteError(remote)
 	}
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 	repo := path
@@ -205,29 +205,36 @@ func ParseRemote(remote string) (string, error) {
 		repo = host + "/" + path
 	}
 	if host == "" || strings.Count(path, "/") != 1 || !validRepo(repo) {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", redactRemote(remote))
+		return "", remoteError(remote)
 	}
 	return repo, nil
 }
 
-// redactRemote drops any userinfo (user, password or token) from a URL
-// remote so it never reaches an error message. It works on the raw string
-// because a remote that fails to parse can still carry credentials.
-func redactRemote(remote string) string {
-	scheme, rest, ok := strings.Cut(remote, "://")
-	if !ok {
-		return remote
+// remoteError reports an origin remote ParseRemote cannot use. The remote is
+// quoted only in a form that cannot carry credentials: a URL whose userinfo
+// url.Parse has stripped, or an scp-like user@host:path. Anything else, such
+// as a URL that fails to parse or still contains "@", is not shown, because
+// re-deriving its structure by hand is how a token leaks.
+func remoteError(remote string) error {
+	if shown, ok := safeRemote(remote); ok {
+		return fmt.Errorf("cannot read a GitHub repository from remote %q", shown)
 	}
-	authority, path, hasPath := strings.Cut(rest, "/")
-	i := strings.LastIndex(authority, "@")
-	if i < 0 {
-		return remote
+	return errors.New("cannot read a GitHub repository from the origin remote (not shown: it may contain credentials)")
+}
+
+func safeRemote(remote string) (string, bool) {
+	if strings.Contains(remote, "://") {
+		u, err := url.Parse(remote)
+		if err != nil {
+			return "", false
+		}
+		u.User = nil
+		remote = u.String()
+		return remote, !strings.Contains(remote, "@")
 	}
-	out := scheme + "://" + authority[i+1:]
-	if hasPath {
-		out += "/" + path
-	}
-	return out
+	// scp-like: an "@" must end a user that has no ":" (so no password).
+	at := strings.Index(remote, "@")
+	return remote, at < 0 || at < strings.Index(remote, ":")
 }
 
 // validRepo reports whether repo is OWNER/NAME or HOST/OWNER/NAME.
@@ -238,7 +245,7 @@ func validRepo(repo string) bool {
 	}
 	for _, p := range parts {
 		// A leading "-" would read as a flag to gh or git.
-		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \t\r\n\\") {
+		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \t\r\n\\@") {
 			return false
 		}
 	}
