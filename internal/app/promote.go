@@ -197,7 +197,7 @@ func ParseRemote(remote string) (string, error) {
 		}
 		path = rest
 	} else {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", remote)
+		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", redactRemote(remote))
 	}
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 	repo := path
@@ -205,9 +205,29 @@ func ParseRemote(remote string) (string, error) {
 		repo = host + "/" + path
 	}
 	if host == "" || strings.Count(path, "/") != 1 || !validRepo(repo) {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", remote)
+		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", redactRemote(remote))
 	}
 	return repo, nil
+}
+
+// redactRemote drops any userinfo (user, password or token) from a URL
+// remote so it never reaches an error message. It works on the raw string
+// because a remote that fails to parse can still carry credentials.
+func redactRemote(remote string) string {
+	scheme, rest, ok := strings.Cut(remote, "://")
+	if !ok {
+		return remote
+	}
+	authority, path, hasPath := strings.Cut(rest, "/")
+	i := strings.LastIndex(authority, "@")
+	if i < 0 {
+		return remote
+	}
+	out := scheme + "://" + authority[i+1:]
+	if hasPath {
+		out += "/" + path
+	}
+	return out
 }
 
 // validRepo reports whether repo is OWNER/NAME or HOST/OWNER/NAME.
@@ -217,7 +237,8 @@ func validRepo(repo string) bool {
 		return false
 	}
 	for _, p := range parts {
-		if p == "" || strings.ContainsAny(p, " \t\r\n\\") {
+		// A leading "-" would read as a flag to gh or git.
+		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \t\r\n\\") {
 			return false
 		}
 	}
