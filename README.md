@@ -101,6 +101,9 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
+Cursor imports this hook and runs it on `beforeSubmitPrompt`. It does not
+capture jots there: see [Cursor hook](#cursor-hook).
+
 Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
 - `suppressOriginalPrompt` is ignored, so the block message repeats your jot
@@ -182,11 +185,40 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 }
 ```
 
+Cursor reloads this file on save.
+
+Cursor also loads Claude Code user hooks and runs them on `beforeSubmitPrompt`.
+`aside hook claude` only acts on `UserPromptSubmit`, so that imported hook
+prints nothing and the prompt reaches the model. The Cursor hook above is
+required even when the Claude hook is already installed. After any change,
+type `>> test` and check you get `✓ Jotted #N` rather than a model reply.
+
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
 the session. With a single workspace root, that root is used as the working
 directory. With several roots, aside doesn't guess: it records all of them in
-the entry's metadata and leaves the git fields empty.
+the entry's metadata and leaves the git fields empty. A multi-root window is a
+normal Cursor layout, and every jot captured there has no repo, branch, or
+commit.
+
+Verified with Cursor 3.22.12 on macOS, from the Hooks output channel and by
+replaying the payload Cursor logged. A live blocked prompt in the editor is
+not in this list yet:
+
+- An ordinary prompt ran `aside hook cursor` from `~/.cursor/hooks.json` and
+  returned `{"continue":true}` in 16ms, and the model received it.
+- A `>>` prompt sent while only the Claude hook was installed ran as
+  `aside hook claude`, produced no output, and reached the model.
+- Replayed with `hook_event_name: "beforeSubmitPrompt"`: a `>>` prompt returns
+  `{"continue":false,"user_message":"✓ Jotted #N"}`. One workspace root records
+  repo, branch, and commit. Two or more leave the git fields empty and store
+  the roots in metadata.
+- `>>x`, a leading space, and `>>` mid-sentence pass through.
+
+Not yet verified in the live editor:
+
+- A `>>` prompt shows `✓ Jotted #N` and the model does not reply.
+- Whether a blocked prompt still appears in the conversation.
 
 ## MCP server (read-only)
 
@@ -210,6 +242,20 @@ For Codex, the same entry in `~/.codex/config.toml`:
 command = "/Users/you/go/bin/aside"
 args = ["mcp"]
 ```
+
+For Cursor, merge this into the `mcpServers` object in `~/.cursor/mcp.json`:
+
+```json
+"aside": {
+  "command": "/Users/you/go/bin/aside",
+  "args": ["mcp"]
+}
+```
+
+Cursor reloads `mcp.json` on save. A chat that is already open does not see
+the new server; start a new chat. With Cursor 3.22.12 the server connected
+over stdio. `inbox`, `show`, and `search` were checked by driving `aside mcp`
+directly, not yet from inside a Cursor chat.
 
 To have Codex check your notes on its own, add a line to your `AGENTS.md`,
 for example: "My side notes are in the `aside` MCP server; check `inbox` when
