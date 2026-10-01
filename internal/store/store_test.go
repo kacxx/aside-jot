@@ -134,6 +134,13 @@ func TestWALEnabled(t *testing.T) {
 	if busy != 2000 {
 		t.Fatalf("busy_timeout = %d, want 2000", busy)
 	}
+	var sync int
+	if err := s.DB().QueryRow("PRAGMA synchronous").Scan(&sync); err != nil {
+		t.Fatal(err)
+	}
+	if sync != 1 { // NORMAL
+		t.Fatalf("synchronous = %d, want 1 (NORMAL)", sync)
+	}
 	if _, err := s.Insert(context.Background(), &Entry{Text: "x"}); err != nil {
 		t.Fatal(err)
 	}
