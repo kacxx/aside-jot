@@ -83,7 +83,13 @@ type Entry struct {
 	Branch    string          `json:"branch,omitempty"`
 	CommitSHA string          `json:"commit_sha,omitempty"`
 	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	// IssueURL is metadata's issue_url, set when the jot was promoted to an
+	// issue. It is read from metadata, never written by Insert.
+	IssueURL string `json:"issue_url,omitempty"`
 }
+
+// MetaIssueURL is the metadata key holding a promoted jot's issue URL.
+const MetaIssueURL = "issue_url"
 
 // Store is a handle on the jot database.
 type Store struct {
@@ -282,6 +288,47 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status string) error {
 	return nil
 }
 
+// SetMetadata sets metadata[key] = value and, unless status is empty, the
+// status, in one transaction. Other metadata keys are kept.
+func (s *Store) SetMetadata(ctx context.Context, id int64, key string, value any, status string) error {
+	v, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	// BEGIN IMMEDIATE (see _txlock in DSN): the read below and the update can't
+	// interleave with another writer.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }() // after Commit this is a no-op returning ErrTxDone
+	var raw, cur string
+	err = tx.QueryRowContext(ctx, `SELECT metadata, status FROM entries WHERE id = ?`, id).Scan(&raw, &cur)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	meta := map[string]json.RawMessage{}
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil || meta == nil {
+		return fmt.Errorf("entry %d: metadata is not a JSON object", id)
+	}
+	meta[key] = v
+	b, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	if status == "" {
+		status = cur
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE entries SET metadata = ?, status = ? WHERE id = ?`,
+		string(b), status, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Backup writes a consistent copy of the database to dst using VACUUM INTO.
 // It refuses to overwrite an existing file. The backup is owner-only: dst is
 // created exclusively with filePerm first, and VACUUM INTO accepts an empty
@@ -347,6 +394,10 @@ func scan(rows *sql.Rows) ([]Entry, error) {
 		e.CreatedAt = t
 		if meta != "" && meta != "{}" {
 			e.Metadata = json.RawMessage(meta)
+			var m map[string]any
+			if json.Unmarshal(e.Metadata, &m) == nil {
+				e.IssueURL, _ = m[MetaIssueURL].(string)
+			}
 		}
 		out = append(out, e)
 	}
