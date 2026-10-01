@@ -100,9 +100,10 @@ essentially process start-up.
 1. Install the hooks as described in the README.
 2. In Claude Code, type `>> hello from claude`. You should see `✓ Jotted #N`,
    and the model should not respond.
-3. In Cursor, type `>> hello from cursor`. You should see the same. This needs
-   the `aside hook cursor` hook; the Claude hook Cursor imports does not
-   capture jots.
+3. In Cursor, type `>> hello from cursor`. You should see `✓ Jotted #N` and
+   the jot is saved. This needs the `aside hook cursor` hook; the Claude hook
+   Cursor imports does not capture jots. On Cursor 3.23.12 the model still
+   receives the prompt: `continue: false` is merged and not enforced.
 4. In Codex, trust the hook in `/hooks` first, then type `>> hello from codex`.
    You should see the same, and Codex should not start a turn.
 5. In each tool, type `what does >> do in bash?`. It must go to the model as
