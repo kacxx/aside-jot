@@ -218,8 +218,9 @@ var tools = []map[string]any{
 		"annotations": map[string]any{"readOnlyHint": true},
 	},
 	{
-		"name":        "show",
-		"description": "Show one jot by id, including its git context and metadata.",
+		"name": "show",
+		"description": "Show one jot by id, including its git context and metadata. issue_url is set " +
+			"when the user has promoted the jot to an issue.",
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},

@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,5 +132,65 @@ func TestPathWarning(t *testing.T) {
 	}
 	if got := pathWarning(gone, look(self, nil)); !strings.Contains(got, "could not check this binary") || !strings.Contains(got, "use "+gone) {
 		t.Errorf("binary vanished: %q", got)
+	}
+}
+
+// ghFake stands in for git and gh: no real GitHub calls.
+type ghFake struct{ calls []string }
+
+func (f *ghFake) Run(_ context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
+	if name == "gh" && args[0] == "issue" {
+		return []byte("https://github.com/o/n/issues/7\n"), nil
+	}
+	return nil, nil
+}
+
+func TestPromoteCLI(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	f := &ghFake{}
+	old := promoteRunner
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner = old })
+	aside := func(args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, nil, &out)
+		return out.String(), err
+	}
+
+	if _, err := aside("add", "ship it\nwith details"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := aside("promote", "1", "--dry-run", "--repo", "o/n")
+	if err != nil || !strings.HasPrefix(out, "repo:  o/n\ntitle: ship it\n\nship it\nwith details\n\nCaptured ") {
+		t.Fatalf("dry run: %q, %v", out, err)
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("dry run ran %v", f.calls)
+	}
+	if out, _ := aside("show", "1"); strings.Contains(out, "issue:") || !strings.Contains(out, "(inbox)") {
+		t.Fatalf("dry run changed the jot: %q", out)
+	}
+
+	// The jot was added outside a repo, so the target must be given.
+	if _, err := aside("promote", "1"); err == nil || !strings.Contains(err.Error(), "pass --repo") {
+		t.Fatalf("no repo: %v", err)
+	}
+	if out, err := aside("promote", "--repo=o/n", "#1"); err != nil || out != "https://github.com/o/n/issues/7\n" {
+		t.Fatalf("promote: %q, %v", out, err)
+	}
+	if out, _ := aside("show", "1"); !strings.Contains(out, "(done)") || !strings.Contains(out, "issue:     https://github.com/o/n/issues/7") {
+		t.Fatalf("show after promote: %q", out)
+	}
+	if _, err := aside("promote", "1", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "already promoted to https://github.com/o/n/issues/7") {
+		t.Fatalf("second promote: %v", err)
+	}
+	if _, err := aside("promote", "99", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
+		t.Fatalf("unknown id: %v", err)
+	}
+	for _, args := range [][]string{{"promote"}, {"promote", "1", "2"}, {"promote", "1", "--bogus"}, {"promote", "1", "--repo"}} {
+		if _, err := aside(args...); err == nil || !strings.Contains(err.Error(), "usage: aside promote") {
+			t.Errorf("%v: %v", args, err)
+		}
 	}
 }

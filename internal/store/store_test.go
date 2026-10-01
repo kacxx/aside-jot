@@ -251,3 +251,41 @@ func TestBackup(t *testing.T) {
 		t.Fatal("backup file was modified")
 	}
 }
+
+func TestSetMetadata(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	if _, err := s.Insert(ctx, &Entry{Text: "a", Metadata: json.RawMessage(`{"k":"v"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Insert(ctx, &Entry{Text: "b"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.SetMetadata(ctx, 1, MetaIssueURL, "https://x/1", StatusDone); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.Get(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]string
+	if err := json.Unmarshal(e.Metadata, &m); err != nil || m["k"] != "v" || m[MetaIssueURL] != "https://x/1" {
+		t.Fatalf("metadata: %s (%v)", e.Metadata, err)
+	}
+	if e.Status != StatusDone || e.IssueURL != "https://x/1" {
+		t.Fatalf("entry: %+v", e)
+	}
+
+	// An empty status keeps the current one; empty metadata becomes an object.
+	if err := s.SetMetadata(ctx, 2, "n", 3, ""); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := s.Get(ctx, 2); e.Status != StatusInbox || string(e.Metadata) != `{"n":3}` || e.IssueURL != "" {
+		t.Fatalf("entry 2: %+v", e)
+	}
+
+	if err := s.SetMetadata(ctx, 99, "k", "v", StatusDone); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: %v", err)
+	}
+}

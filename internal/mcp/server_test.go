@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -245,5 +246,42 @@ func TestJSONTypeName(t *testing.T) {
 		if got := jsonTypeName(k); got != want {
 			t.Errorf("%v: got %q, want %q", k, got, want)
 		}
+	}
+}
+
+// fakeGH creates an issue without running anything.
+type fakeGH struct{}
+
+func (fakeGH) Run(_ context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+	if name == "gh" && args[0] == "issue" {
+		return []byte("https://github.com/o/n/issues/3\n"), nil
+	}
+	return nil, nil
+}
+
+func TestShowIssueURL(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "promote me", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Promote(ctx, fakeGH{}, app.PromoteRequest{ID: 1, Repo: "o/n"}); err != nil {
+		t.Fatal(err)
+	}
+	res, rerr := NewServer(svc, "test").callTool(ctx, "show", json.RawMessage(`{"id":1}`))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	text := res.(map[string]any)["content"].([]map[string]any)[0]["text"].(string)
+	var e struct {
+		Status   string `json:"status"`
+		IssueURL string `json:"issue_url"`
+	}
+	if err := json.Unmarshal([]byte(text), &e); err != nil || e.IssueURL != "https://github.com/o/n/issues/3" || e.Status != "done" {
+		t.Fatalf("show: %s (%v)", text, err)
 	}
 }
