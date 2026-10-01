@@ -197,7 +197,7 @@ func ParseRemote(remote string) (string, error) {
 		}
 		path = rest
 	} else {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", remote)
+		return "", remoteError(remote)
 	}
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 	repo := path
@@ -205,9 +205,36 @@ func ParseRemote(remote string) (string, error) {
 		repo = host + "/" + path
 	}
 	if host == "" || strings.Count(path, "/") != 1 || !validRepo(repo) {
-		return "", fmt.Errorf("cannot read a GitHub repository from remote %q", remote)
+		return "", remoteError(remote)
 	}
 	return repo, nil
+}
+
+// remoteError reports an origin remote ParseRemote cannot use. The remote is
+// quoted only in a form that cannot carry credentials: a URL whose userinfo
+// url.Parse has stripped, or an scp-like user@host:path. Anything else, such
+// as a URL that fails to parse or still contains "@", is not shown, because
+// re-deriving its structure by hand is how a token leaks.
+func remoteError(remote string) error {
+	if shown, ok := safeRemote(remote); ok {
+		return fmt.Errorf("cannot read a GitHub repository from remote %q", shown)
+	}
+	return errors.New("cannot read a GitHub repository from the origin remote (not shown: it may contain credentials)")
+}
+
+func safeRemote(remote string) (string, bool) {
+	if strings.Contains(remote, "://") {
+		u, err := url.Parse(remote)
+		if err != nil {
+			return "", false
+		}
+		u.User = nil
+		remote = u.String()
+		return remote, !strings.Contains(remote, "@")
+	}
+	// scp-like: an "@" must end a user that has no ":" (so no password).
+	at := strings.Index(remote, "@")
+	return remote, at < 0 || at < strings.Index(remote, ":")
 }
 
 // validRepo reports whether repo is OWNER/NAME or HOST/OWNER/NAME.
@@ -217,7 +244,8 @@ func validRepo(repo string) bool {
 		return false
 	}
 	for _, p := range parts {
-		if p == "" || strings.ContainsAny(p, " \t\r\n\\") {
+		// A leading "-" would read as a flag to gh or git.
+		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \t\r\n\\@") {
 			return false
 		}
 	}

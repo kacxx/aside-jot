@@ -1,8 +1,9 @@
 // Package store persists jots in SQLite.
 //
-// Every connection is opened with busy_timeout and WAL set in the DSN, so
-// concurrent hook processes queue on the write lock instead of failing
-// immediately. Each capture is a single autocommit INSERT.
+// Every connection is opened with busy_timeout, WAL and synchronous=NORMAL set
+// in the DSN, so concurrent hook processes queue on the write lock instead of
+// failing immediately, and each holds it only briefly. Each capture is a
+// single autocommit INSERT.
 //
 // busy_timeout is not the whole story for a brand-new file: switching it to
 // WAL can return SQLITE_BUSY without consulting the busy handler when several
@@ -106,6 +107,12 @@ func DSN(path string, busyTimeout time.Duration) string {
 	q := url.Values{}
 	q.Add("_pragma", "busy_timeout("+strconv.FormatInt(busyTimeout.Milliseconds(), 10)+")")
 	q.Add("_pragma", "journal_mode(WAL)")
+	// In WAL mode NORMAL syncs at checkpoints rather than on every commit, so
+	// a writer no longer holds the write lock across a disk flush. With FULL,
+	// slow flushes (Windows) let back-to-back writers starve a waiting
+	// connection past its busy timeout. A commit survives an application
+	// crash either way; only a power loss or OS crash can undo the newest ones.
+	q.Add("_pragma", "synchronous(NORMAL)")
 	q.Set("_txlock", "immediate")
 	return u.String() + "?" + q.Encode()
 }
