@@ -89,9 +89,46 @@ func TestParseRemote(t *testing.T) {
 	for _, in := range []string{
 		"", "/srv/git/proj.git", `C:\src\proj`, "file:///srv/git/proj.git",
 		"https://github.com/kacxx", "https://github.com/a/b/c", "git@github.com:", "https://github.com/",
+		"https://github.com/-x/y", "git@github.com:o/-n.git",
 	} {
 		if got, err := ParseRemote(in); err == nil {
 			t.Errorf("ParseRemote(%q) = %q; want an error", in, got)
+		}
+	}
+}
+
+func TestParseRemoteRedactsCredentials(t *testing.T) {
+	for _, in := range []string{
+		"https://kc:ghp_SECRET123@github.com/acme/group/sub/repo.git",
+		"https://ghp_SECRET123@github.com/acme",
+		"https://kc:ghp_SECRET123@github.com",
+		"https://kc:ghp_SECRET123@github.com/a b%zz", // fails url.Parse
+		"https://ghp_SECRET123:x@ghe.example.com/a/b/c",
+		// A "/" in the secret ends the authority early: url.Parse fails or
+		// reads the token as the host.
+		"https://x-access-token:ghs_SECRET/CD@github.com/o/n",
+		"https://kc:p/SECRET@github.com/o/n.git",
+		"https://ghp_SECRET/b@github.com/x",
+		"kc:ghp_SECRET@github.com:a/b",
+	} {
+		got, err := ParseRemote(in)
+		if err == nil {
+			t.Fatalf("ParseRemote(%q) = %q: want an error", in, got)
+		}
+		if strings.Contains(err.Error(), "SECRET") {
+			t.Errorf("error leaks credentials: %v", err)
+		}
+	}
+	for in, want := range map[string]string{
+		"https://u:p@github.com/a/b/c": `"https://github.com/a/b/c"`,
+		"https://host/a/b/c":           `"https://host/a/b/c"`,
+		"git@github.com:a/b/c":         `"git@github.com:a/b/c"`,
+		"/srv/git/proj.git":            `"/srv/git/proj.git"`,
+		"https://u:p/w@host/a/b/c":     "not shown",
+		"https://host/a@b/c/d":         "not shown",
+	} {
+		if err := remoteError(in); !strings.Contains(err.Error(), want) {
+			t.Errorf("remoteError(%q) = %v, want it to contain %s", in, err, want)
 		}
 	}
 }
@@ -222,6 +259,8 @@ func TestPromoteFailuresLeaveJotUnchanged(t *testing.T) {
 		{"no origin", repoInfo, PromoteRequest{ID: 1}, &fakeRunner{}, "no origin remote in /r"},
 		{"bad origin", repoInfo, PromoteRequest{ID: 1}, &fakeRunner{remote: "/srv/proj.git"}, "pass --repo"},
 		{"bad --repo", repoInfo, PromoteRequest{ID: 1, Repo: "nope"}, &fakeRunner{}, `invalid --repo "nope"`},
+		{"--repo looks like a flag", repoInfo, PromoteRequest{ID: 1, Repo: "--help/y"}, &fakeRunner{}, `invalid --repo "--help/y"`},
+		{"--repo part looks like a flag", repoInfo, PromoteRequest{ID: 1, Repo: "o/-x"}, &fakeRunner{}, `invalid --repo "o/-x"`},
 		{"gh missing", repoInfo, PromoteRequest{ID: 1, Repo: "o/n"}, &fakeRunner{auth: notFound}, "gh (GitHub CLI) not found"},
 		{"gh logged out", repoInfo, PromoteRequest{ID: 1, Repo: "o/n"},
 			&fakeRunner{auth: errors.New("exit status 1: You are not logged into any GitHub hosts")}, "gh is not logged in to github.com; run 'gh auth login'"},
