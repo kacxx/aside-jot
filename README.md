@@ -193,7 +193,8 @@ hook. `aside hook claude` passes through any named event other than
 `UserPromptSubmit`, so it prints nothing and the prompt reaches the model. A
 payload with no event name would be handled as a jot. The Cursor hook above is
 required even when the Claude hook is already installed. After any change,
-type `>> test` and check you get `✓ Jotted #N` rather than a model reply.
+type `>> test` and check you get `✓ Jotted #N`. On Cursor 3.23.12 the model
+still receives that prompt.
 
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
@@ -203,9 +204,7 @@ the entry's metadata and leaves the git fields empty. A multi-root window is a
 normal Cursor layout, and every jot captured there has no repo, branch, or
 commit.
 
-Verified with Cursor 3.22.12 on macOS, from the Hooks output channel and by
-replaying the payload Cursor logged. A live blocked prompt in the editor is
-not in this list yet:
+Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS:
 
 - An ordinary prompt ran `aside hook cursor` from `~/.cursor/hooks.json` and
   returned `{"continue":true}` in 16ms, and the model received it.
@@ -216,11 +215,15 @@ not in this list yet:
   repo, branch, and commit. Two or more leave the git fields empty and store
   the roots in metadata.
 - `>>x`, a leading space, and `>>` mid-sentence pass through.
+- Live on 3.23.12, `>> hello from cursor` ran `aside hook cursor` in 23ms and
+  returned `{"continue":false,"user_message":"✓ Jotted #9"}`. Cursor merged
+  that response. The prompt still reached the model in the same conversation.
+  `aside show 9` has `source: cursor`, the conversation id as the session, no
+  repo, branch, or commit, and all 26 workspace roots in metadata.
 
-Not yet verified in the live editor:
-
-- A `>>` prompt shows `✓ Jotted #N` and the model does not reply.
-- Whether a blocked prompt still appears in the conversation.
+Known Cursor behaviour, outside aside's control (seen with 3.23.12):
+`continue: false` is accepted and the user message is shown, but the prompt is
+still submitted to the model. Capture works. The block does not.
 
 ## MCP server (read-only)
 
@@ -254,10 +257,9 @@ For Cursor, merge this into the `mcpServers` object in `~/.cursor/mcp.json`:
 }
 ```
 
-Cursor reloads `mcp.json` on save. A chat that is already open does not see
-the new server; start a new chat. With Cursor 3.22.12 the server connected
-over stdio. `inbox`, `show`, and `search` were checked by driving `aside mcp`
-directly, not yet from inside a Cursor chat.
+Cursor reloads `mcp.json` on save. A server added mid-session connected over
+stdio on 3.22.12 but did not appear in that chat's tool list. After a restart
+onto 3.23.12, the same conversation could call `show`, and it returned jot 9.
 
 To have Codex check your notes on its own, add a line to your `AGENTS.md`,
 for example: "My side notes are in the `aside` MCP server; check `inbox` when
