@@ -63,6 +63,16 @@ else
   bad "could not parse a jot id from inbox"
 fi
 
+hr "4b. promote --dry-run (no gh call, no change)"
+"$BIN" add "e2e promote me" >/dev/null
+PID="$("$BIN" inbox | grep "e2e promote me" | grep -oE '#[0-9]+' | head -1 | tr -d '#')"
+DRY="$("$BIN" promote "$PID" --repo o/n --dry-run 2>&1)"; echo "$DRY" | sed 's/^/  /'
+echo "$DRY" | grep -q "^repo:  o/n" && echo "$DRY" | grep -q "^title: e2e promote me" \
+  && ok "promote --dry-run prints repo and title" || bad "promote --dry-run output"
+"$BIN" show "$PID" | grep -q "(inbox)" && ok "dry run leaves the jot in the inbox" || bad "dry run changed the jot"
+"$BIN" promote 999999 --repo o/n --dry-run >/dev/null 2>&1 && bad "promote of an unknown id exited 0" \
+  || ok "promote of an unknown id exits non-zero"
+
 hr "5. hooks: >> captured, normal passes through (per-agent schemas printed)"
 for agent in claude codex cursor; do
   CAP="$(printf '{"prompt":">> note via %s","cwd":"%s"}' "$agent" "$TMP" | "$BIN" hook "$agent" 2>&1)"
