@@ -104,24 +104,31 @@ func TestParseRemoteRedactsCredentials(t *testing.T) {
 		"https://kc:ghp_SECRET123@github.com",
 		"https://kc:ghp_SECRET123@github.com/a b%zz", // fails url.Parse
 		"https://ghp_SECRET123:x@ghe.example.com/a/b/c",
+		// A "/" in the secret ends the authority early: url.Parse fails or
+		// reads the token as the host.
+		"https://x-access-token:ghs_SECRET/CD@github.com/o/n",
+		"https://kc:p/SECRET@github.com/o/n.git",
+		"https://ghp_SECRET/b@github.com/x",
+		"kc:ghp_SECRET@github.com:a/b",
 	} {
-		_, err := ParseRemote(in)
+		got, err := ParseRemote(in)
 		if err == nil {
-			t.Fatalf("ParseRemote(%q): want an error", in)
+			t.Fatalf("ParseRemote(%q) = %q: want an error", in, got)
 		}
 		if strings.Contains(err.Error(), "SECRET") {
 			t.Errorf("error leaks credentials: %v", err)
 		}
 	}
 	for in, want := range map[string]string{
-		"https://u:p@github.com/a/b/c": "https://github.com/a/b/c",
-		"https://u@p@host":             "https://host",
-		"https://host/a@b":             "https://host/a@b",
-		"git@github.com:a/b/c":         "git@github.com:a/b/c",
-		"/srv/git/proj.git":            "/srv/git/proj.git",
+		"https://u:p@github.com/a/b/c": `"https://github.com/a/b/c"`,
+		"https://host/a/b/c":           `"https://host/a/b/c"`,
+		"git@github.com:a/b/c":         `"git@github.com:a/b/c"`,
+		"/srv/git/proj.git":            `"/srv/git/proj.git"`,
+		"https://u:p/w@host/a/b/c":     "not shown",
+		"https://host/a@b/c/d":         "not shown",
 	} {
-		if got := redactRemote(in); got != want {
-			t.Errorf("redactRemote(%q) = %q, want %q", in, got, want)
+		if err := remoteError(in); !strings.Contains(err.Error(), want) {
+			t.Errorf("remoteError(%q) = %v, want it to contain %s", in, err, want)
 		}
 	}
 }
