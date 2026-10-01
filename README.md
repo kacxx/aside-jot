@@ -188,8 +188,10 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 Cursor reloads this file on save.
 
 Cursor also loads Claude Code user hooks and runs them on `beforeSubmitPrompt`.
-`aside hook claude` only acts on `UserPromptSubmit`, so that imported hook
-prints nothing and the prompt reaches the model. The Cursor hook above is
+Cursor 3.22.12 sends `hook_event_name: "beforeSubmitPrompt"` to that imported
+hook. `aside hook claude` passes through any named event other than
+`UserPromptSubmit`, so it prints nothing and the prompt reaches the model. A
+payload with no event name would be handled as a jot. The Cursor hook above is
 required even when the Claude hook is already installed. After any change,
 type `>> test` and check you get `✓ Jotted #N` rather than a model reply.
 
