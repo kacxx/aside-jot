@@ -5,8 +5,8 @@ A side channel for thoughts while you work with coding agents.
 Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
-(Cursor currently doesn't block jots when the Claude Code hook is also installed: see
-[Cursor hook](#cursor-hook).)
+In Cursor, a blocked jot stays in the chat and is sent to the model with your
+next message there ([#25](https://github.com/kacxx/aside-jot/issues/25)).
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -103,8 +103,8 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
-Cursor imports this hook and runs it on `beforeSubmitPrompt`. It does not
-capture jots there: see [Cursor hook](#cursor-hook).
+Cursor imports this hook and runs it on `beforeSubmitPrompt`. There it replies
+exactly as `aside hook cursor` does: see [Cursor hook](#cursor-hook).
 
 Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
@@ -189,20 +189,19 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 
 Cursor reloads this file on save.
 
-Cursor also loads Claude Code user hooks and runs them on `beforeSubmitPrompt`.
-Cursor 3.22.12 sends `hook_event_name: "beforeSubmitPrompt"` to that imported
-hook. `aside hook claude` passes through any named event other than
-`UserPromptSubmit`, so it prints nothing and the prompt reaches the model. A
-payload with no event name would be handled as a jot. The Cursor hook above is
-required even when the Claude hook is already installed.
-
-> **While the Claude hook is in `~/.claude/settings.json`, Cursor does not
-> block jots.** The imported hook's empty output lets the prompt through, so
-> the jot is saved and the model still receives it
-> ([#23](https://github.com/kacxx/aside-jot/issues/23)). Until that is fixed,
-> Cursor only blocks jots when the Claude hook is not installed. After any
-> change, type `>> test` and check you get `✓ Jotted #N` rather than a model
-> reply.
+Cursor also loads Claude Code user hooks from `~/.claude/settings.json` and runs
+them on `beforeSubmitPrompt` next to its own, sending them
+`hook_event_name: "beforeSubmitPrompt"`. On 3.23.12, with both hooks installed
+and the Claude hook printing nothing, the prompt reached the model even though
+`aside hook cursor` replied `{"continue":false}`. With the Claude hook removed,
+the jot was blocked ([#23](https://github.com/kacxx/aside-jot/issues/23)). So on
+that event `aside hook claude` now replies exactly as `aside hook cursor` does:
+it blocks jots and answers `{"continue":true}` to every other prompt. Either
+hook is enough in Cursor, and both together are safe. If both run on one
+prompt, the jot is saved once, keyed on Cursor's `generation_id`. Only the hook
+that saved it shows `✓ Jotted #N`; the other blocks without a message, so
+Cursor doesn't show the confirmation twice. After any change, type `>> test`
+and check you get `✓ Jotted #N` rather than a model reply.
 
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
@@ -212,7 +211,8 @@ the entry's metadata and leaves the git fields empty. A multi-root window is a
 normal Cursor layout, and every jot captured there has no repo, branch, or
 commit.
 
-Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS:
+Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS. This was
+before the fix for #23, while the Claude hook was silent on `beforeSubmitPrompt`:
 
 - An ordinary prompt ran `aside hook cursor` from `~/.cursor/hooks.json` and
   returned `{"continue":true}` in 16ms, and the model received it.
@@ -231,6 +231,19 @@ Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS:
   or commit, and the workspace roots in metadata.
 - Live on 3.23.12 with the Claude hook removed, `>> test` returned
   `✓ Jotted #10` and the model did not reply.
+
+Verified live on Cursor 3.23.12, macOS, after the fix for #23. A `>>` prompt was
+blocked and saved once in each setup:
+
+- Both hooks: jot #13. Both hooks replied `{"continue":false}` and Cursor
+  logged "Merged 2 valid response(s)". That build showed `✓ Jotted #13` twice;
+  the hook that finds the jot already saved now replies without a message.
+- Only `aside hook claude`, imported by Cursor: jot #14, saved with
+  `source: cursor`.
+- Only `aside hook cursor`: jot #15.
+- After the both-hooks and Claude-only runs, the next message in that chat sent
+  the blocked jot to the model with it
+  ([#25](https://github.com/kacxx/aside-jot/issues/25)).
 
 ## MCP server (read-only)
 

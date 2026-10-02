@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -214,16 +215,7 @@ func (s *Store) DB() *sql.DB { return s.db }
 // Insert stores e with one autocommit INSERT and returns its id.
 // Status defaults to inbox and CreatedAt to now.
 func (s *Store) Insert(ctx context.Context, e *Entry) (int64, error) {
-	if e.Status == "" {
-		e.Status = StatusInbox
-	}
-	if e.CreatedAt.IsZero() {
-		e.CreatedAt = time.Now()
-	}
-	meta := string(e.Metadata)
-	if meta == "" || meta == "null" {
-		meta = "{}"
-	}
+	meta := e.prepare()
 	res, err := s.db.ExecContext(ctx, `INSERT INTO entries
 		(text, created_at, status, source, session_id, cwd, repo_root, repo_name, branch, commit_sha, metadata)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -238,6 +230,76 @@ func (s *Store) Insert(ctx context.Context, e *Entry) (int64, error) {
 	}
 	e.ID = id
 	return id, nil
+}
+
+// InsertOnce stores e unless an entry with the same source already has
+// metadata[key] == value, in which case *e is replaced by that entry. The
+// check and the insert are one statement, so two processes saving the same
+// prompt at once store it once. It reports whether e was inserted. key must be
+// letters, digits and underscores, as it is spliced into a JSON path.
+//
+// The check scans entries: metadata is not indexed. Only jots reach it, and a
+// personal jot database stays small.
+func (s *Store) InsertOnce(ctx context.Context, e *Entry, key, value string) (bool, error) {
+	if !jsonKey.MatchString(key) {
+		return false, fmt.Errorf("invalid metadata key %q", key)
+	}
+	meta := e.prepare()
+	path := `$."` + key + `"`
+	res, err := s.db.ExecContext(ctx, `INSERT INTO entries
+		(text, created_at, status, source, session_id, cwd, repo_root, repo_name, branch, commit_sha, metadata)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE NOT EXISTS (SELECT 1 FROM entries WHERE source = ? AND json_extract(metadata, ?) = ?)`,
+		e.Text, e.CreatedAt.UTC().Format(timeLayout), e.Status, e.Source, e.SessionID, e.Cwd,
+		e.RepoRoot, e.RepoName, e.Branch, e.CommitSHA, meta,
+		e.Source, path, value)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if n == 1 {
+		id, err := res.LastInsertId()
+		if err != nil {
+			return false, err
+		}
+		e.ID = id
+		return true, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entries
+		WHERE source = ? AND json_extract(metadata, ?) = ? ORDER BY id LIMIT 1`, e.Source, path, value)
+	if err != nil {
+		return false, err
+	}
+	es, err := scan(rows)
+	if err != nil {
+		return false, err
+	}
+	if len(es) == 0 {
+		return false, ErrNotFound
+	}
+	*e = es[0]
+	return false, nil
+}
+
+var jsonKey = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+// prepare fills e's defaults (status inbox, CreatedAt now) and returns its
+// metadata as stored.
+func (e *Entry) prepare() string {
+	if e.Status == "" {
+		e.Status = StatusInbox
+	}
+	if e.CreatedAt.IsZero() {
+		e.CreatedAt = time.Now()
+	}
+	meta := string(e.Metadata)
+	if meta == "" || meta == "null" {
+		return "{}"
+	}
+	return meta
 }
 
 const columns = `id, text, created_at, status, source, session_id, cwd, repo_root, repo_name, branch, commit_sha, metadata`
