@@ -1,6 +1,6 @@
 // Command aside is a side channel for thoughts while working with coding agents.
 //
-// Typing ">> some thought" in Claude Code or Cursor stores the thought with
+// Typing ">> some thought" in Claude Code or Codex stores the thought with
 // git context and blocks the prompt, so the model never sees it.
 package main
 
