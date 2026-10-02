@@ -156,7 +156,7 @@ func TestResumeCommand(t *testing.T) {
 		want string
 	}{
 		{Session{Source: "claude", ID: "abc-1", Cwd: "/work/api"}, "cd /work/api && claude --resume abc-1"},
-		{Session{Source: "codex", ID: "abc-2", Cwd: "/work/web"}, "cd /work/web && codex resume abc-2"},
+		{Session{Source: "codex", ID: "abc-2", Cwd: "/work/web"}, "codex resume abc-2"},
 		{Session{Source: "claude", ID: "abc-3"}, "claude --resume abc-3"},
 		{Session{Source: "claude", ID: "abc-4", Cwd: "/Users/me/my repo's"}, `cd '/Users/me/my repo'\''s' && claude --resume abc-4`},
 		{Session{Source: "cursor", ID: "abc-5", Cwd: "/work"}, ""},

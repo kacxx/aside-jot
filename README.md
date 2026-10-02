@@ -386,10 +386,13 @@ SUP-4821 token TTL investigation
 - **Label a session** by jotting `>> session: <why>` in it, for example
   `>> session: SUP-4821 token TTL investigation`. The newest `session:` jot
   labels the session; without one, its first jot does.
-- **Resume commands** are printed, not run. Claude Code keeps sessions per
-  project directory, so the command starts with a `cd` to the session's working
-  directory. Codex sessions get `codex resume <id>`. Cursor isn't supported, so
-  its sessions have no resume command.
+- **Resume commands** are printed, not run. Claude Code stores a session under
+  the directory it started in, so the command starts with a `cd` there, read
+  from the session's transcript (the jot's directory if the transcript is
+  gone). Codex resumes from any directory, so its sessions get
+  `codex resume <id>` with no `cd`. Cursor isn't supported, so its sessions
+  have no resume command.
+- Done jots are listed with `(done)`, as in `aside search`.
 - **Only chats with a jot in them are listed.** A chat where you never jotted
   doesn't appear. Starting a ticket's chat with a `session:` jot makes it
   findable.

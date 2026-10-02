@@ -17,9 +17,9 @@ const SessionPrefix = "session:"
 type Session struct {
 	Source string
 	ID     string
-	// Cwd is where the session resumes from: for Claude Code, the directory
-	// the session started in, read from its transcript; otherwise, or if the
-	// transcript is gone, the working directory of its first jot that has one.
+	// Cwd is, for Claude Code, the directory the session started in, read from
+	// its transcript; otherwise, or if the transcript is gone, the working
+	// directory of its first jot that has one.
 	Cwd   string
 	Jots  []Entry // oldest first
 	Label Entry   // the newest "session:" jot, else the first jot
@@ -42,21 +42,22 @@ func (s Session) LabelText() string {
 // ResumeCommand returns a shell command that reopens the session, or "" if
 // its agent has no resume command aside knows about.
 func (s Session) ResumeCommand() string {
-	var cmd string
 	switch s.Source {
 	case "claude":
-		cmd = "claude --resume " + shellQuote(s.ID)
+		cmd := "claude --resume " + shellQuote(s.ID)
+		if s.Cwd == "" {
+			return cmd
+		}
+		// Claude Code stores sessions under the directory they started in, so
+		// resume from there.
+		return "cd " + shellQuote(s.Cwd) + " && " + cmd
 	case "codex":
-		cmd = "codex resume " + shellQuote(s.ID)
+		// Codex finds a session from any directory; a cd would only make the
+		// resume fail if that directory had since been deleted.
+		return "codex resume " + shellQuote(s.ID)
 	default:
 		return ""
 	}
-	if s.Cwd == "" {
-		return cmd
-	}
-	// Claude Code stores sessions under the directory they started in, so
-	// resume from there.
-	return "cd " + shellQuote(s.Cwd) + " && " + cmd
 }
 
 // Sessions returns the n most recently active sessions (all if n <= 0).
