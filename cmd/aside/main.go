@@ -381,7 +381,11 @@ func printSession(w io.Writer, s app.Session, jots []app.Entry) {
 	parts = append(parts, count, fmt.Sprintf("last %s (#%d)", age(latest.CreatedAt, now()), latest.ID))
 	fmt.Fprintln(w, "  "+strings.Join(parts, " · "))
 	for _, e := range jots {
-		fmt.Fprintf(w, "  #%-4d %-6s %s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70))
+		status := ""
+		if e.Status != "inbox" {
+			status = "  (" + e.Status + ")"
+		}
+		fmt.Fprintf(w, "  #%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70), status)
 	}
 	if cmd := s.ResumeCommand(); cmd != "" {
 		fmt.Fprintln(w, "  "+cmd)

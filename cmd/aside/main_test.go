@@ -75,6 +75,9 @@ func TestFindAndSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := svc.Done(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
 	svc.Close()
 	old := now
 	now = func() time.Time { return time.Now().AddDate(0, 0, 3) }
@@ -93,7 +96,7 @@ func TestFindAndSessions(t *testing.T) {
 		"SUP-4821 token TTL\n",
 		"  claude · 2 jots · last 3d (#2)\n",
 		"  #1    3d     session: SUP-4821 token TTL\n",
-		"  #2    3d     SUP-4821 needs a backend ticket\n",
+		"  #2    3d     SUP-4821 needs a backend ticket  (done)\n",
 		"  cd /work/api && claude --resume c1\n",
 		"Not in a session:\n#3 ",
 	} {
