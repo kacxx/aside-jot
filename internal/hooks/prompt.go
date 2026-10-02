@@ -27,6 +27,7 @@ type promptHook struct {
 	event string                  // the hook_event_name this hook handles
 	pass  any                     // pass-through reply; nil writes nothing
 	block func(reason string) any // the agent's blocking reply
+	alt   *promptHook             // handles payloads naming its event instead, if set
 
 	// parse decodes a payload that fits in memory into its event and prompt,
 	// plus a build func that constructs the request to save (Text is filled in
@@ -43,8 +44,19 @@ func (h promptHook) eventMatches(event string) bool {
 }
 
 func (h promptHook) run(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
-	p := readPayload(r)
+	return h.handle(ctx, readPayload(r), w, open)
+}
+
+// handOff reports whether a payload naming event belongs to h.alt.
+func (h promptHook) handOff(event string) bool {
+	return h.alt != nil && event != "" && event != h.event && event == h.alt.event
+}
+
+func (h promptHook) handle(ctx context.Context, p payload, w io.Writer, open app.Opener) error {
 	if p.oversized {
+		if h.handOff(p.event) {
+			return h.alt.handle(ctx, p, w, open)
+		}
 		if !h.eventMatches(p.event) {
 			return h.passThrough(w)
 		}
@@ -56,6 +68,9 @@ func (h promptHook) run(ctx context.Context, r io.Reader, w io.Writer, open app.
 	event, prompt, build, err := h.parse(p.data)
 	if err != nil {
 		return h.passThrough(w)
+	}
+	if h.handOff(event) {
+		return h.alt.handle(ctx, p, w, open)
 	}
 	if !h.eventMatches(event) {
 		return h.passThrough(w)

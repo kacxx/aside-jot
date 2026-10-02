@@ -16,9 +16,15 @@ type ClaudeBlock struct {
 
 // Claude handles a Claude Code UserPromptSubmit hook. Pass-through writes
 // nothing (any stdout would be added to the model's context).
+//
+// Cursor imports Claude Code hooks and runs them on beforeSubmitPrompt. A
+// silent reply there makes Cursor submit the prompt even when `aside hook
+// cursor` blocked it, so that event is handled exactly as `aside hook cursor`
+// would handle it.
 func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
 	return promptHook{
 		event: "UserPromptSubmit",
+		alt:   &cursorHook,
 		block: func(reason string) any {
 			return ClaudeBlock{Decision: "block", Reason: reason, SuppressOriginalPrompt: true}
 		},
