@@ -67,6 +67,33 @@ func TestSessionsGroupAndLabel(t *testing.T) {
 	}
 }
 
+// A "session:" jot names its session only if it has a name, which may start on
+// the next line; a bare "session:" must not blank out the label.
+func TestSessionLabelNeedsAName(t *testing.T) {
+	ctx := context.Background()
+	svc := sessionService(t)
+	jot(t, svc, "claude", "s1", "", "first thought")                // #1
+	jot(t, svc, "claude", "s1", "", "session:\nSUP-4821 fix login") // #2
+	jot(t, svc, "claude", "s1", "", "session:")                     // #3
+	jot(t, svc, "claude", "s1", "", "SESSION:  \n \n")              // #4, trimmed to "SESSION:"
+	jot(t, svc, "codex", "s2", "", "codex idea")                    // #5
+	jot(t, svc, "codex", "s2", "", "session:")                      // #6
+
+	ss, err := svc.Sessions(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 2 {
+		t.Fatalf("got %d sessions", len(ss))
+	}
+	if ss[0].ID != "s2" || ss[0].Label.ID != 5 || ss[0].LabelText() != "codex idea" {
+		t.Fatalf("bare session: must keep the first jot as label: #%d %q", ss[0].Label.ID, ss[0].LabelText())
+	}
+	if ss[1].Label.ID != 2 || ss[1].LabelText() != "SUP-4821 fix login" {
+		t.Fatalf("name on the next line: #%d %q", ss[1].Label.ID, ss[1].LabelText())
+	}
+}
+
 func TestFind(t *testing.T) {
 	ctx := context.Background()
 	svc := sessionService(t)

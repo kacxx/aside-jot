@@ -17,7 +17,7 @@ type Session struct {
 	// Cwd is the working directory of the session's first jot that has one.
 	Cwd   string
 	Jots  []Entry // oldest first
-	Label Entry   // the newest "session:" jot, else the first jot
+	Label Entry   // the newest "session:" jot with a name, else the first jot
 	// Matches are the session's jots that matched a Find query, oldest first.
 	Matches []Entry
 }
@@ -25,12 +25,13 @@ type Session struct {
 // Latest returns the session's newest jot.
 func (s Session) Latest() Entry { return s.Jots[len(s.Jots)-1] }
 
-// LabelText is the label's first line, without a "session:" prefix.
+// LabelText is the label's first line, or for a "session:" jot the first line
+// of its name.
 func (s Session) LabelText() string {
-	line, _, _ := strings.Cut(s.Label.Text, "\n")
-	if rest, ok := cutSessionPrefix(line); ok {
-		return rest
+	if name, ok := sessionName(s.Label.Text); ok {
+		return name
 	}
+	line, _, _ := strings.Cut(s.Label.Text, "\n")
 	return line
 }
 
@@ -134,7 +135,7 @@ func groupSessions(es []Entry) []Session {
 	for i := range ss {
 		ss[i].Label = ss[i].Jots[0]
 		for _, e := range ss[i].Jots {
-			if _, ok := cutSessionPrefix(e.Text); ok {
+			if _, ok := sessionName(e.Text); ok {
 				ss[i].Label = e
 			}
 		}
@@ -143,13 +144,17 @@ func groupSessions(es []Entry) []Session {
 	return ss
 }
 
-// cutSessionPrefix reports whether text starts with "session:" (any case) and
-// returns the rest, trimmed.
-func cutSessionPrefix(text string) (string, bool) {
+// sessionName returns the name a "session:" jot (any case) gives its session:
+// the first line of the text after the prefix, which may start on the next
+// line. It reports false if text has no such prefix or names nothing, so a
+// bare "session:" never blanks out a label.
+func sessionName(text string) (string, bool) {
 	if len(text) < len(SessionPrefix) || !strings.EqualFold(text[:len(SessionPrefix)], SessionPrefix) {
 		return "", false
 	}
-	return strings.TrimSpace(text[len(SessionPrefix):]), true
+	name, _, _ := strings.Cut(strings.TrimSpace(text[len(SessionPrefix):]), "\n")
+	name = strings.TrimSpace(name)
+	return name, name != ""
 }
 
 // shellQuote quotes s for a POSIX shell unless it only has safe characters.

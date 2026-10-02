@@ -385,7 +385,8 @@ SUP-4821 token TTL investigation
 
 - **Label a session** by jotting `>> session: <why>` in it, for example
   `>> session: SUP-4821 token TTL investigation`. The newest `session:` jot
-  labels the session; without one, its first jot does.
+  labels the session; without one, its first jot does. The name can start on
+  the line after `session:`; a `session:` jot with no name is ignored.
 - **Resume commands** are printed, not run. Claude Code keeps sessions per
   project directory, so the command starts with a `cd` to the session's working
   directory. Codex sessions get `codex resume <id>`. Cursor isn't supported, so
