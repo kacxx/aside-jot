@@ -5,6 +5,8 @@ A side channel for thoughts while you work with coding agents.
 Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
+(Cursor currently doesn't block jots when the Claude Code hook is also installed: see
+[Cursor hook](#cursor-hook).)
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -192,9 +194,15 @@ Cursor 3.22.12 sends `hook_event_name: "beforeSubmitPrompt"` to that imported
 hook. `aside hook claude` passes through any named event other than
 `UserPromptSubmit`, so it prints nothing and the prompt reaches the model. A
 payload with no event name would be handled as a jot. The Cursor hook above is
-required even when the Claude hook is already installed. After any change,
-type `>> test` and check you get `✓ Jotted #N`. On Cursor 3.23.12 the model
-still receives that prompt.
+required even when the Claude hook is already installed.
+
+> **While the Claude hook is in `~/.claude/settings.json`, Cursor does not
+> block jots.** The imported hook's empty output lets the prompt through, so
+> the jot is saved and the model still receives it
+> ([#23](https://github.com/kacxx/aside-jot/issues/23)). Until that is fixed,
+> Cursor only blocks jots when the Claude hook is not installed. After any
+> change, type `>> test` and check you get `✓ Jotted #N` rather than a model
+> reply.
 
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
@@ -215,15 +223,14 @@ Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS:
   repo, branch, and commit. Two or more leave the git fields empty and store
   the roots in metadata.
 - `>>x`, a leading space, and `>>` mid-sentence pass through.
-- Live on 3.23.12, `>> hello from cursor` ran `aside hook cursor` in 23ms and
-  returned `{"continue":false,"user_message":"✓ Jotted #9"}`. Cursor merged
-  that response. The prompt still reached the model in the same conversation.
-  `aside show 9` has `source: cursor`, the conversation id as the session, no
-  repo, branch, or commit, and all 26 workspace roots in metadata.
-
-Known Cursor behaviour, outside aside's control (seen with 3.23.12):
-`continue: false` is accepted and the user message is shown, but the prompt is
-still submitted to the model. Capture works. The block does not.
+- Live on 3.23.12 with both hooks installed, `>> hello from cursor` ran
+  `aside hook cursor`, which returned
+  `{"continue":false,"user_message":"✓ Jotted #9"}`. The imported Claude hook
+  produced no output, and the prompt still reached the model. `aside show 9`
+  has `source: cursor`, the conversation id as the session, no repo, branch,
+  or commit, and the workspace roots in metadata.
+- Live on 3.23.12 with the Claude hook removed, `>> test` returned
+  `✓ Jotted #10` and the model did not reply.
 
 ## MCP server (read-only)
 
