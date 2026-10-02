@@ -5,6 +5,8 @@ A side channel for thoughts while you work with coding agents.
 Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
+(Cursor currently doesn't block jots when the Claude Code hook is also installed: see
+[Cursor hook](#cursor-hook).)
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -185,21 +187,48 @@ Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 }
 ```
 
+Cursor reloads this file on save.
+
+Cursor also loads Claude Code user hooks from `~/.claude/settings.json` and runs
+them on `beforeSubmitPrompt` next to its own, sending them
+`hook_event_name: "beforeSubmitPrompt"`. If one of them prints nothing, Cursor
+submits the prompt even when another replied `{"continue":false}`
+([#23](https://github.com/kacxx/aside-jot/issues/23)). So on that event
+`aside hook claude` replies exactly as `aside hook cursor` does: it blocks jots
+and answers `{"continue":true}` to every other prompt. Installing either hook in
+Cursor is enough, and installing both is safe. If both run on one prompt, the
+jot is saved once, keyed on Cursor's `generation_id`, and both replies show the
+same `✓ Jotted #N`. After any change, type `>> test` and check you get
+`✓ Jotted #N` rather than a model reply.
+
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as
 the session. With a single workspace root, that root is used as the working
 directory. With several roots, aside doesn't guess: it records all of them in
-the entry's metadata and leaves the git fields empty.
+the entry's metadata and leaves the git fields empty. A multi-root window is a
+normal Cursor layout, and every jot captured there has no repo, branch, or
+commit.
 
-Cursor also loads Claude Code user hooks from `~/.claude/settings.json` and runs
-them on `beforeSubmitPrompt` next to its own. If one of them prints nothing,
-Cursor submits the prompt even when another replied `{"continue":false}`. So
-`aside hook claude` replies in Cursor's format when the payload's
-`hook_event_name` is `beforeSubmitPrompt`. It blocks jots and answers
-`{"continue":true}` to every other prompt, the same as `aside hook cursor`.
-Installing either hook in Cursor is enough, and installing both is safe. If
-both run on one prompt, the jot is saved once, keyed on Cursor's
-`generation_id`, and both replies show the same `✓ Jotted #N`.
+Verified with Cursor 3.22.12 and, after a restart, 3.23.12, on macOS. This was
+before the fix for #23, while the Claude hook was silent on `beforeSubmitPrompt`:
+
+- An ordinary prompt ran `aside hook cursor` from `~/.cursor/hooks.json` and
+  returned `{"continue":true}` in 16ms, and the model received it.
+- A `>>` prompt sent while only the Claude hook was installed ran as
+  `aside hook claude`, produced no output, and reached the model.
+- Replayed with `hook_event_name: "beforeSubmitPrompt"`: a `>>` prompt returns
+  `{"continue":false,"user_message":"✓ Jotted #N"}`. One workspace root records
+  repo, branch, and commit. Two or more leave the git fields empty and store
+  the roots in metadata.
+- `>>x`, a leading space, and `>>` mid-sentence pass through.
+- Live on 3.23.12 with both hooks installed, `>> hello from cursor` ran
+  `aside hook cursor`, which returned
+  `{"continue":false,"user_message":"✓ Jotted #9"}`. The imported Claude hook
+  produced no output, and the prompt still reached the model. `aside show 9`
+  has `source: cursor`, the conversation id as the session, no repo, branch,
+  or commit, and the workspace roots in metadata.
+- Live on 3.23.12 with the Claude hook removed, `>> test` returned
+  `✓ Jotted #10` and the model did not reply.
 
 ## MCP server (read-only)
 
@@ -223,6 +252,19 @@ For Codex, the same entry in `~/.codex/config.toml`:
 command = "/Users/you/go/bin/aside"
 args = ["mcp"]
 ```
+
+For Cursor, merge this into the `mcpServers` object in `~/.cursor/mcp.json`:
+
+```json
+"aside": {
+  "command": "/Users/you/go/bin/aside",
+  "args": ["mcp"]
+}
+```
+
+Cursor reloads `mcp.json` on save. A server added mid-session connected over
+stdio on 3.22.12 but did not appear in that chat's tool list. After a restart
+onto 3.23.12, the same conversation could call `show`, and it returned jot 9.
 
 To have Codex check your notes on its own, add a line to your `AGENTS.md`,
 for example: "My side notes are in the `aside` MCP server; check `inbox` when
