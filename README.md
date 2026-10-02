@@ -2,12 +2,13 @@
 
 A side channel for thoughts while you work with coding agents.
 
-Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
+Type `>> some thought` into Claude Code or Codex and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
-In Cursor, a blocked jot stays in the chat and is sent to the model with your
-next message there ([#25](https://github.com/kacxx/aside-jot/issues/25)), so
-Cursor support is partial: see [Cursor hook](#cursor-hook).
+
+**aside does not work with Cursor.** Cursor sends a blocked prompt to the model
+with your next message, so a jot there is not private: see
+[Cursor (not supported)](#cursor-not-supported).
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -104,8 +105,8 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
-Cursor imports this hook and runs it on `beforeSubmitPrompt`. There it replies
-exactly as `aside hook cursor` does: see [Cursor hook](#cursor-hook).
+Cursor also imports this hook, but aside does not work with Cursor: see
+[Cursor (not supported)](#cursor-not-supported).
 
 Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
@@ -177,15 +178,20 @@ Not yet verified: whether anything sees the prompt before the hook runs (as
 Claude Code's session-title model does, above). Codex reports a few seconds of
 "Worked for" time on a blocked prompt, though no model reply appears.
 
-## Cursor hook
+## Cursor (not supported)
 
-> **Cursor support is partial.** Jots are saved and the turn is blocked, but
-> Cursor keeps the blocked prompt in the chat and sends it to the model with
-> your next message there
+> **aside does not work with Cursor, and Cursor support is paused.** The hook
+> saves the jot and blocks that turn, but Cursor keeps the blocked prompt in the
+> chat and sends it to the model with your next message there
 > ([#25](https://github.com/kacxx/aside-jot/issues/25)). This is a
-> [known Cursor bug](https://forum.cursor.com/t/prompt-blocked-by-a-beforesubmitprompt-hook-is-still-sent-to-the-model-with-the-next-message/173565).
-> Until it is fixed, start a new chat after a jot if the model must not
-> see it, or jot from a terminal with `aside add`.
+> [known Cursor bug](https://forum.cursor.com/t/prompt-blocked-by-a-beforesubmitprompt-hook-is-still-sent-to-the-model-with-the-next-message/173565),
+> and aside can't work around it: the hook only decides whether a prompt is
+> sent now. Don't rely on `>>` in Cursor; jot from a terminal with `aside add`
+> instead. Cursor also runs the Claude Code hook from
+> `~/.claude/settings.json`, so the same applies if only that one is installed.
+>
+> `aside hook cursor` stays in the binary, and the setup and test notes below
+> are kept for when Cursor fixes the bug.
 
 Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 
@@ -346,7 +352,7 @@ aside promote <id> [--repo owner/name] [--dry-run]
 aside backup <path>        consistent copy via VACUUM INTO; never overwrites
 aside paths                where the data and binary live; warns about PATH
 aside hook claude|codex|cursor
-                           hook entry points
+                           hook entry points (cursor: not supported, see Cursor)
 aside mcp                  read-only MCP server on stdio
 ```
 
@@ -431,6 +437,8 @@ are; only the commands change.
   the loop.
 - **Sync**: local SQLite file only; use `aside backup` to copy it.
 - **UI**: CLI and MCP only.
+- **Cursor**: not supported until Cursor stops sending blocked prompts to the
+  model; see [Cursor (not supported)](#cursor-not-supported).
 
 The MVP proves one thing: capturing is instant, reliable and invisible to the
 model. Everything else can come later.
