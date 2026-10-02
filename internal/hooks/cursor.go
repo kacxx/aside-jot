@@ -72,7 +72,8 @@ func parseCursor(data []byte) (event, prompt string, build func() app.CaptureReq
 			Metadata:  meta,
 		}
 		// Cursor runs both `aside hook cursor` and an imported `aside hook
-		// claude` on the same prompt; the generation id makes them save it once.
+		// claude` on the same prompt; the generation id makes them save it
+		// once, and only the hook that saved it shows the confirmation.
 		if in.GenerationID != "" {
 			req.OnceKey = "generation_id"
 		}

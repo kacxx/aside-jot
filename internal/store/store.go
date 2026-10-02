@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -234,8 +235,15 @@ func (s *Store) Insert(ctx context.Context, e *Entry) (int64, error) {
 // InsertOnce stores e unless an entry with the same source already has
 // metadata[key] == value, in which case *e is replaced by that entry. The
 // check and the insert are one statement, so two processes saving the same
-// prompt at once store it once. It reports whether e was inserted.
+// prompt at once store it once. It reports whether e was inserted. key must be
+// letters, digits and underscores, as it is spliced into a JSON path.
+//
+// The check scans entries: metadata is not indexed. Only jots reach it, and a
+// personal jot database stays small.
 func (s *Store) InsertOnce(ctx context.Context, e *Entry, key, value string) (bool, error) {
+	if !jsonKey.MatchString(key) {
+		return false, fmt.Errorf("invalid metadata key %q", key)
+	}
 	meta := e.prepare()
 	path := `$."` + key + `"`
 	res, err := s.db.ExecContext(ctx, `INSERT INTO entries
@@ -275,6 +283,8 @@ func (s *Store) InsertOnce(ctx context.Context, e *Entry, key, value string) (bo
 	*e = es[0]
 	return false, nil
 }
+
+var jsonKey = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 // prepare fills e's defaults (status inbox, CreatedAt now) and returns its
 // metadata as stored.

@@ -5,8 +5,6 @@ A side channel for thoughts while you work with coding agents.
 Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
-(Cursor currently doesn't block jots when the Claude Code hook is also installed: see
-[Cursor hook](#cursor-hook).)
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -191,15 +189,17 @@ Cursor reloads this file on save.
 
 Cursor also loads Claude Code user hooks from `~/.claude/settings.json` and runs
 them on `beforeSubmitPrompt` next to its own, sending them
-`hook_event_name: "beforeSubmitPrompt"`. If one of them prints nothing, Cursor
-submits the prompt even when another replied `{"continue":false}`
-([#23](https://github.com/kacxx/aside-jot/issues/23)). So on that event
-`aside hook claude` replies exactly as `aside hook cursor` does: it blocks jots
-and answers `{"continue":true}` to every other prompt. Installing either hook in
-Cursor is enough, and installing both is safe. If both run on one prompt, the
-jot is saved once, keyed on Cursor's `generation_id`, and both replies show the
-same `✓ Jotted #N`. After any change, type `>> test` and check you get
-`✓ Jotted #N` rather than a model reply.
+`hook_event_name: "beforeSubmitPrompt"`. On 3.23.12, with both hooks installed
+and the Claude hook printing nothing, the prompt reached the model even though
+`aside hook cursor` replied `{"continue":false}`. With the Claude hook removed,
+the jot was blocked ([#23](https://github.com/kacxx/aside-jot/issues/23)). So on
+that event `aside hook claude` now replies exactly as `aside hook cursor` does:
+it blocks jots and answers `{"continue":true}` to every other prompt. Either
+hook should be enough in Cursor, and both together should be safe. If both run
+on one prompt, the jot is saved once, keyed on Cursor's `generation_id`. Only
+the hook that saved it shows `✓ Jotted #N`; the other blocks without a message,
+so Cursor doesn't show the confirmation twice. After any change, type `>> test`
+and check you get `✓ Jotted #N` rather than a model reply.
 
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
 Every other prompt gets `{"continue":true}`. The conversation id is stored as

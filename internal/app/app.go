@@ -71,9 +71,16 @@ type CaptureRequest struct {
 
 // Capture stores a jot with best-effort git context for req.Cwd.
 func (s *Service) Capture(ctx context.Context, req CaptureRequest) (Entry, error) {
+	e, _, err := s.CaptureOnce(ctx, req)
+	return e, err
+}
+
+// CaptureOnce is Capture that also reports whether a new entry was saved. It
+// is false only when req.OnceKey matched an existing entry, which is returned.
+func (s *Service) CaptureOnce(ctx context.Context, req CaptureRequest) (Entry, bool, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		return Entry{}, errors.New("empty jot")
+		return Entry{}, false, errors.New("empty jot")
 	}
 	g := s.git(ctx, req.Cwd)
 	e := Entry{
@@ -90,20 +97,21 @@ func (s *Service) Capture(ctx context.Context, req CaptureRequest) (Entry, error
 	if len(req.Metadata) > 0 {
 		b, err := json.Marshal(req.Metadata)
 		if err != nil {
-			return Entry{}, err
+			return Entry{}, false, err
 		}
 		e.Metadata = b
 	}
 	if v, _ := req.Metadata[req.OnceKey].(string); req.OnceKey != "" && v != "" {
-		if _, err := s.store.InsertOnce(ctx, &e, req.OnceKey, v); err != nil {
-			return Entry{}, err
+		saved, err := s.store.InsertOnce(ctx, &e, req.OnceKey, v)
+		if err != nil {
+			return Entry{}, false, err
 		}
-		return e, nil
+		return e, saved, nil
 	}
 	if _, err := s.store.Insert(ctx, &e); err != nil {
-		return Entry{}, err
+		return Entry{}, false, err
 	}
-	return e, nil
+	return e, true, nil
 }
 
 // Inbox returns the newest n inbox entries (all if n <= 0).
