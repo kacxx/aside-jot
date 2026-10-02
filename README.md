@@ -101,6 +101,9 @@ Claude Code erases the prompt from context and shows you the reason. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
+Cursor imports this hook and runs it on `beforeSubmitPrompt`. There it replies
+exactly as `aside hook cursor` does: see [Cursor hook](#cursor-hook).
+
 Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
 - `suppressOriginalPrompt` is ignored, so the block message repeats your jot
@@ -187,6 +190,16 @@ Every other prompt gets `{"continue":true}`. The conversation id is stored as
 the session. With a single workspace root, that root is used as the working
 directory. With several roots, aside doesn't guess: it records all of them in
 the entry's metadata and leaves the git fields empty.
+
+Cursor also loads Claude Code user hooks from `~/.claude/settings.json` and runs
+them on `beforeSubmitPrompt` next to its own. If one of them prints nothing,
+Cursor submits the prompt even when another replied `{"continue":false}`. So
+`aside hook claude` replies in Cursor's format when the payload's
+`hook_event_name` is `beforeSubmitPrompt`. It blocks jots and answers
+`{"continue":true}` to every other prompt, the same as `aside hook cursor`.
+Installing either hook in Cursor is enough, and installing both is safe. If
+both run on one prompt, the jot is saved once, keyed on Cursor's
+`generation_id`, and both replies show the same `✓ Jotted #N`.
 
 ## MCP server (read-only)
 

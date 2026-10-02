@@ -436,3 +436,123 @@ func TestWrongTypedFieldsStillBlock(t *testing.T) {
 		}
 	})
 }
+
+// --- Claude hook imported by Cursor ---
+
+// runClaudeAsCursor runs `aside hook claude` on a Cursor payload, as Cursor
+// does when it imports the hook from ~/.claude/settings.json.
+func runClaudeAsCursor(t *testing.T, payload []byte, open app.Opener) (string, CursorOutput) {
+	t.Helper()
+	var out bytes.Buffer
+	if err := Claude(context.Background(), bytes.NewReader(payload), &out, open); err != nil {
+		t.Fatal(err)
+	}
+	var o CursorOutput
+	if err := json.Unmarshal(out.Bytes(), &o); err != nil {
+		t.Fatalf("Cursor needs a reply, got %q: %v", out.String(), err)
+	}
+	return out.String(), o
+}
+
+func TestClaudeOnCursorEventPassThrough(t *testing.T) {
+	out, o := runClaudeAsCursor(t, fixture(t, "cursor", "normal", nil), neverOpen(t))
+	if !o.Continue || strings.TrimSpace(out) != `{"continue":true}` {
+		t.Fatalf("pass-through must be {\"continue\":true}, got %q", out)
+	}
+	// A malformed payload names no event, so it stays silent as a Claude hook.
+	if out, _ := runClaude(t, fixture(t, "cursor", "malformed", nil), neverOpen(t)); out != "" {
+		t.Fatalf("malformed: got %q", out)
+	}
+}
+
+// Issue #23: a silent Claude hook made Cursor submit a jot that `aside hook
+// cursor` had blocked. On beforeSubmitPrompt it must block in Cursor format.
+func TestClaudeOnCursorEventBlocks(t *testing.T) {
+	repo := gitRepo(t)
+	open, path := tempDB(t)
+	_, o := runClaudeAsCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{"workspace_roots": []string{repo}}), open)
+	if o.Continue || o.UserMessage != "✓ Jotted #1" {
+		t.Fatalf("got %+v", o)
+	}
+	e := entries(t, path)[0]
+	if e.Source != "cursor" || e.SessionID != "e5b0a1c7-3d2f-4c8e-9a14-7f6d2b0c8e31" || e.Cwd != repo {
+		t.Fatalf("entry: %+v", e)
+	}
+}
+
+func TestClaudeOnCursorEventFailureBlocks(t *testing.T) {
+	failing := func() (*app.Service, error) { return nil, errors.New("disk on fire") }
+	payload := fixture(t, "cursor", "capture_single_root", nil)
+	_, o := runClaudeAsCursor(t, payload, failing)
+	if o.Continue {
+		t.Fatalf("got %+v", o)
+	}
+	assertBlockedFailed(t, o.UserMessage, "orders pagination")
+}
+
+// With both hooks installed Cursor runs each on the same prompt; the jot is
+// saved once and both replies name it.
+func TestCursorAndClaudeHooksSaveOnce(t *testing.T) {
+	open, path := tempDB(t)
+	payload := fixture(t, "cursor", "capture_single_root", nil)
+	_, a := runCursor(t, payload, open)
+	_, b := runClaudeAsCursor(t, payload, open)
+	if a.Continue || b.Continue || a.UserMessage != "✓ Jotted #1" || b.UserMessage != "✓ Jotted #1" {
+		t.Fatalf("cursor %+v, claude %+v", a, b)
+	}
+	if es := entries(t, path); len(es) != 1 {
+		t.Fatalf("saved %d entries, want 1", len(es))
+	}
+
+	// A new prompt in the same conversation has a new generation id.
+	_, c := runCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{"generation_id": "g2"}), open)
+	if c.UserMessage != "✓ Jotted #2" {
+		t.Fatalf("next prompt: %+v", c)
+	}
+}
+
+// Cursor may run the two hooks at the same time.
+func TestCursorAndClaudeHooksSaveOnceConcurrently(t *testing.T) {
+	open, path := tempDB(t)
+	// Create the database first so both hooks race on the insert, not the migration.
+	if svc, err := open(); err != nil {
+		t.Fatal(err)
+	} else {
+		svc.Close()
+	}
+	payload := fixture(t, "cursor", "capture_single_root", nil)
+	const n = 8
+	msgs := make(chan string, n)
+	for i := range n {
+		hook := Cursor
+		if i%2 == 1 {
+			hook = Claude
+		}
+		go func() {
+			var out bytes.Buffer
+			_ = hook(context.Background(), bytes.NewReader(payload), &out, open)
+			var o CursorOutput
+			_ = json.Unmarshal(out.Bytes(), &o)
+			msgs <- o.UserMessage
+		}()
+	}
+	for range n {
+		if m := <-msgs; m != "✓ Jotted #1" {
+			t.Errorf("reply %q, want ✓ Jotted #1", m)
+		}
+	}
+	if es := entries(t, path); len(es) != 1 {
+		t.Fatalf("saved %d entries, want 1", len(es))
+	}
+}
+
+// Without a generation id there is nothing to match on: each hook saves.
+func TestCursorNoGenerationIDNotDeduplicated(t *testing.T) {
+	open, path := tempDB(t)
+	payload := fixture(t, "cursor", "capture_single_root", map[string]any{"generation_id": ""})
+	runCursor(t, payload, open)
+	runCursor(t, payload, open)
+	if es := entries(t, path); len(es) != 2 {
+		t.Fatalf("saved %d entries, want 2", len(es))
+	}
+}

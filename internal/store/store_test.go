@@ -296,3 +296,26 @@ func TestSetMetadata(t *testing.T) {
 		t.Fatalf("missing id: %v", err)
 	}
 }
+
+func TestInsertOnce(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+
+	first := Entry{Text: "a", Source: "cursor", Metadata: json.RawMessage(`{"generation_id":"g1"}`)}
+	if ok, err := s.InsertOnce(ctx, &first, "generation_id", "g1"); !ok || err != nil || first.ID != 1 {
+		t.Fatalf("first: ok=%v id=%d err=%v", ok, first.ID, err)
+	}
+	dup := Entry{Text: "a again", Source: "cursor", Metadata: json.RawMessage(`{"generation_id":"g1"}`)}
+	if ok, err := s.InsertOnce(ctx, &dup, "generation_id", "g1"); ok || err != nil || dup.ID != 1 || dup.Text != "a" {
+		t.Fatalf("dup: ok=%v entry=%+v err=%v", ok, dup, err)
+	}
+	// Another source, or another value, is a different prompt.
+	other := Entry{Text: "b", Source: "claude", Metadata: json.RawMessage(`{"generation_id":"g1"}`)}
+	if ok, err := s.InsertOnce(ctx, &other, "generation_id", "g1"); !ok || err != nil || other.ID != 2 {
+		t.Fatalf("other source: ok=%v id=%d err=%v", ok, other.ID, err)
+	}
+	next := Entry{Text: "c", Source: "cursor", Metadata: json.RawMessage(`{"generation_id":"g2"}`)}
+	if ok, err := s.InsertOnce(ctx, &next, "generation_id", "g2"); !ok || err != nil || next.ID != 3 {
+		t.Fatalf("other value: ok=%v id=%d err=%v", ok, next.ID, err)
+	}
+}

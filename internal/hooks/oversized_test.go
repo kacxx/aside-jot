@@ -144,6 +144,14 @@ func TestOversizedOtherEventPassesThrough(t *testing.T) {
 	if _, o := runCursor(t, cursorOwn, neverOpen(t)); o.Continue {
 		t.Fatalf("cursor, own event: %+v", o)
 	}
+	// Cursor runs an imported Claude hook on its own event.
+	if _, o := runClaudeAsCursor(t, cursorOwn, neverOpen(t)); o.Continue || !strings.Contains(o.UserMessage, "NOT saved") {
+		t.Fatalf("claude on cursor event: %+v", o)
+	}
+	cursorOrdinary := big(t, `"hook_event_name":"beforeSubmitPrompt"`, `"prompt":"hello"`, padString)
+	if _, o := runClaudeAsCursor(t, cursorOrdinary, neverOpen(t)); !o.Continue {
+		t.Fatalf("claude on cursor event, ordinary prompt: %+v", o)
+	}
 }
 
 func TestTooLargeReportsUnroundedLimit(t *testing.T) {
