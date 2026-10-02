@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/kacxx/aside-jot/internal/app"
 )
 
 func TestCLIFlow(t *testing.T) {
@@ -52,6 +55,75 @@ func TestCLIFlow(t *testing.T) {
 	}
 	if got := sh("", "paths"); !strings.Contains(got, "jot.db ($JOT_DB)") {
 		t.Fatalf("paths: %q", got)
+	}
+}
+
+func TestFindAndSessions(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "jot.db")
+	t.Setenv("JOT_DB", db)
+	svc, err := app.Open(db, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, r := range []app.CaptureRequest{
+		{Text: "session: SUP-4821 token TTL", Source: "claude", SessionID: "c1", Cwd: "/work/api"},
+		{Text: "SUP-4821 needs a backend ticket", Source: "claude", SessionID: "c1", Cwd: "/work/api"},
+		{Text: "SUP-4821 from the terminal", Source: "cli"},
+	} {
+		if _, err := svc.Capture(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc.Close()
+	old := now
+	now = func() time.Time { return time.Now().AddDate(0, 0, 3) }
+	t.Cleanup(func() { now = old })
+
+	sh := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := run(args, strings.NewReader(""), &out); err != nil {
+			t.Fatalf("aside %v: %v", args, err)
+		}
+		return out.String()
+	}
+	got := sh("find", "sup-4821")
+	for _, want := range []string{
+		"SUP-4821 token TTL\n",
+		"  claude · 2 jots · last 3d (#2)\n",
+		"  #1    3d     session: SUP-4821 token TTL\n",
+		"  #2    3d     SUP-4821 needs a backend ticket\n",
+		"  cd /work/api && claude --resume c1\n",
+		"Not in a session:\n#3 ",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("find output missing %q:\n%s", want, got)
+		}
+	}
+	if got := sh("find", "nope"); got != "No jots match \"nope\".\n" {
+		t.Fatalf("find no match: %q", got)
+	}
+	got = sh("sessions")
+	if !strings.HasPrefix(got, "SUP-4821 token TTL\n  claude · 2 jots · last 3d (#2)\n  cd /work/api && claude --resume c1\n") {
+		t.Fatalf("sessions: %q", got)
+	}
+}
+
+func TestAge(t *testing.T) {
+	ref := time.Date(2026, 10, 2, 9, 0, 0, 0, time.Local)
+	for _, c := range []struct {
+		t    time.Time
+		want string
+	}{
+		{ref.Add(-time.Hour), "today"},
+		{time.Date(2026, 10, 1, 23, 50, 0, 0, time.Local), "1d"},
+		{ref.AddDate(0, 0, -12), "12d"},
+		{ref.Add(time.Hour), "today"},
+	} {
+		if got := age(c.t, ref); got != c.want {
+			t.Errorf("age(%v): got %q, want %q", c.t, got, c.want)
+		}
 	}
 }
 

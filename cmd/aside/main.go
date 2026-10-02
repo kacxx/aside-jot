@@ -37,6 +37,8 @@ Usage:
   aside inbox [-n N]         list the newest inbox jots (default 20, 0 = all)
   aside show <id>            show one jot with its context
   aside search <query...>    search all jots (substring, case-insensitive)
+  aside find <query...>      sessions with a jot matching the query, and how to resume them
+  aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
   aside done <id>            mark a jot as done
   aside promote <id> [--repo owner/name] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
@@ -176,6 +178,47 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "No jots match %q.\n", q)
 		}
 		printList(stdout, es)
+	case "find":
+		q := strings.Join(args, " ")
+		ss, loose, err := svc.Find(ctx, q)
+		if err != nil {
+			return err
+		}
+		if len(ss) == 0 && len(loose) == 0 {
+			fmt.Fprintf(stdout, "No jots match %q.\n", q)
+		}
+		for i, s := range ss {
+			if i > 0 {
+				fmt.Fprintln(stdout)
+			}
+			printSession(stdout, s, s.Matches)
+		}
+		if len(loose) > 0 {
+			if len(ss) > 0 {
+				fmt.Fprintln(stdout)
+			}
+			fmt.Fprintln(stdout, "Not in a session:")
+			printList(stdout, loose)
+		}
+	case "sessions":
+		fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
+		n := fs.Int("n", 10, "number of sessions to show (0 = all)")
+		if err := fs.Parse(args); err != nil {
+			return err
+		}
+		ss, err := svc.Sessions(ctx, *n)
+		if err != nil {
+			return err
+		}
+		if len(ss) == 0 {
+			fmt.Fprintln(stdout, "No sessions yet: jots captured by a hook carry a session.")
+		}
+		for i, s := range ss {
+			if i > 0 {
+				fmt.Fprintln(stdout)
+			}
+			printSession(stdout, s, nil)
+		}
 	case "done":
 		id, err := parseID(args)
 		if err != nil {
@@ -309,10 +352,7 @@ func parseID(args []string) (int64, error) {
 
 func printList(w io.Writer, es []app.Entry) {
 	for _, e := range es {
-		line, _, _ := strings.Cut(e.Text, "\n")
-		if r := []rune(line); len(r) > 80 {
-			line = string(r[:79]) + "…"
-		}
+		line := firstLine(e.Text, 80)
 		where := location(e)
 		if where != "" {
 			where = "  [" + where + "]"
@@ -323,6 +363,52 @@ func printList(w io.Writer, es []app.Entry) {
 		}
 		fmt.Fprintf(w, "#%-4d %s  %s%s%s\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"), line, where, status)
 	}
+}
+
+// printSession prints a session's label, a summary line, the given jots, and
+// the command to resume it.
+func printSession(w io.Writer, s app.Session, jots []app.Entry) {
+	fmt.Fprintln(w, firstLine(s.LabelText(), 80))
+	latest := s.Latest()
+	parts := []string{s.Source}
+	if where := location(latest); where != "" {
+		parts = append(parts, where)
+	}
+	count := fmt.Sprintf("%d jots", len(s.Jots))
+	if len(s.Jots) == 1 {
+		count = "1 jot"
+	}
+	parts = append(parts, count, fmt.Sprintf("last %s (#%d)", age(latest.CreatedAt, now()), latest.ID))
+	fmt.Fprintln(w, "  "+strings.Join(parts, " · "))
+	for _, e := range jots {
+		fmt.Fprintf(w, "  #%-4d %-6s %s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70))
+	}
+	if cmd := s.ResumeCommand(); cmd != "" {
+		fmt.Fprintln(w, "  "+cmd)
+	}
+}
+
+// firstLine returns text's first line, cut to max runes with an ellipsis.
+func firstLine(text string, max int) string {
+	line, _, _ := strings.Cut(text, "\n")
+	if r := []rune(line); len(r) > max {
+		line = string(r[:max-1]) + "…"
+	}
+	return line
+}
+
+// now is the clock for jot ages; tests replace it.
+var now = time.Now
+
+// age is how many calendar days ago t was in local time: "today", "1d", "12d".
+func age(t, ref time.Time) string {
+	y1, m1, d1 := t.Local().Date()
+	y2, m2, d2 := ref.Local().Date()
+	days := int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	if days <= 0 {
+		return "today"
+	}
+	return strconv.Itoa(days) + "d"
 }
 
 func location(e app.Entry) string {
