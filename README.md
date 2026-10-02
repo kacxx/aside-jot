@@ -418,23 +418,6 @@ commit_sha, metadata` (JSON).
 - Git context is best-effort, with a ~750ms budget. A detached HEAD records the
   commit but no branch. Outside a repo, the git fields are empty.
 
-## Upgrading from `jot`
-
-The command was renamed from `jot` to `aside` because macOS and the BSDs ship
-an unrelated `/usr/bin/jot` that usually comes first on `PATH`
-([#6](https://github.com/kacxx/aside-jot/issues/6)). Your notes stay where they
-are; only the commands change.
-
-1. Install `aside` and run the `paths` command for your platform from
-   [Install](#install). The `db:` line should show your existing database.
-2. In `~/.claude/settings.json`, `~/.cursor/hooks.json` and your MCP config,
-   replace the `jot` command with the absolute `binary:` path, for example
-   `/Users/you/go/bin/aside hook claude`. For the MCP server:
-   `claude mcp remove --scope user jot`, then add it again as shown above.
-3. Remove the old binary. On macOS, Linux and the BSDs, run
-   `rm "$(go env GOPATH)/bin/jot"` (on macOS this leaves the system
-   `/usr/bin/jot` alone). On Windows PowerShell, run
-   `Remove-Item "$(go env GOPATH)\bin\jot.exe"`.
 
 ## Not in v1 (on purpose)
 
