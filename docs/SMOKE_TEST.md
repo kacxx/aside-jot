@@ -41,6 +41,8 @@ jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/claude/capture.json | bin/aside h
 
 ## Cursor hook
 
+Cursor is not supported (see the README); this only checks the hook's replies.
+
 ```sh
 bin/aside hook cursor < testdata/hooks/cursor/normal.json      # {"continue":true}
 bin/aside hook cursor < testdata/hooks/cursor/malformed.json   # {"continue":true}
@@ -100,15 +102,11 @@ essentially process start-up.
 1. Install the hooks as described in the README.
 2. In Claude Code, type `>> hello from claude`. You should see `✓ Jotted #N`,
    and the model should not respond.
-3. In Cursor, type `>> hello from cursor`. You should see `✓ Jotted #N`, and
-   the model should not reply. Check this with only the Cursor hook, with only
-   the Claude hook, and with both
-   ([#23](https://github.com/kacxx/aside-jot/issues/23)); with both, `✓ Jotted
-   #N` must appear once and `aside inbox` must show the jot once.
-4. In Codex, trust the hook in `/hooks` first, then type `>> hello from codex`.
+3. In Codex, trust the hook in `/hooks` first, then type `>> hello from codex`.
    You should see the same, and Codex should not start a turn.
-5. In each tool, type `what does >> do in bash?`. It must go to the model as
+4. In each tool, type `what does >> do in bash?`. It must go to the model as
    normal.
-6. `aside inbox` shows the three jots with repo and branch. A jot from a
-   multi-root Cursor window has no repo or branch; `aside show <id>` lists the
-   workspace roots in its metadata instead.
+5. `aside inbox` shows the two jots with repo and branch.
+
+Cursor is not supported (see the README), so it has no real-tool step. The
+`aside hook cursor` replays above still check the hook itself.
