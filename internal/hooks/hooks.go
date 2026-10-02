@@ -148,8 +148,9 @@ func tooLarge(original string) string {
 	return notSaved(fmt.Errorf("hook payload is larger than %s", humanize.IBytes(uint64(maxPayload))), original)
 }
 
-// save opens the service and captures req. It always returns a message for
-// the user and never panics.
+// save opens the service and captures req. It returns a message for the user,
+// or "" if req.OnceKey matched a jot another hook already saved and confirmed.
+// It never panics.
 func save(ctx context.Context, open app.Opener, req app.CaptureRequest, original string) (msg string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -161,9 +162,13 @@ func save(ctx context.Context, open app.Opener, req app.CaptureRequest, original
 		return notSaved(err, original)
 	}
 	defer svc.Close()
-	e, err := svc.Capture(ctx, req)
+	e, saved, err := svc.CaptureOnce(ctx, req)
 	if err != nil {
 		return notSaved(err, original)
+	}
+	if !saved {
+		// Cursor joins every hook's user_message; only the saving hook confirms.
+		return ""
 	}
 	return fmt.Sprintf("✓ Jotted #%d", e.ID)
 }

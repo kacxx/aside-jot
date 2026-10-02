@@ -318,4 +318,9 @@ func TestInsertOnce(t *testing.T) {
 	if ok, err := s.InsertOnce(ctx, &next, "generation_id", "g2"); !ok || err != nil || next.ID != 3 {
 		t.Fatalf("other value: ok=%v id=%d err=%v", ok, next.ID, err)
 	}
+	for _, key := range []string{"", `a"b`, "a.b", "$"} {
+		if _, err := s.InsertOnce(ctx, &Entry{Text: "d", Source: "cursor"}, key, "v"); err == nil {
+			t.Errorf("key %q: want error", key)
+		}
+	}
 }

@@ -491,14 +491,18 @@ func TestClaudeOnCursorEventFailureBlocks(t *testing.T) {
 }
 
 // With both hooks installed Cursor runs each on the same prompt; the jot is
-// saved once and both replies name it.
+// saved once and both block it. Cursor joins their user_message values, so
+// only the hook that saved it confirms.
 func TestCursorAndClaudeHooksSaveOnce(t *testing.T) {
 	open, path := tempDB(t)
 	payload := fixture(t, "cursor", "capture_single_root", nil)
 	_, a := runCursor(t, payload, open)
-	_, b := runClaudeAsCursor(t, payload, open)
-	if a.Continue || b.Continue || a.UserMessage != "✓ Jotted #1" || b.UserMessage != "✓ Jotted #1" {
-		t.Fatalf("cursor %+v, claude %+v", a, b)
+	out, b := runClaudeAsCursor(t, payload, open)
+	if a.Continue || a.UserMessage != "✓ Jotted #1" {
+		t.Fatalf("first hook: %+v", a)
+	}
+	if b.Continue || strings.TrimSpace(out) != `{"continue":false}` {
+		t.Fatalf("second hook must block silently, got %q", out)
 	}
 	if es := entries(t, path); len(es) != 1 {
 		t.Fatalf("saved %d entries, want 1", len(es))
@@ -522,7 +526,7 @@ func TestCursorAndClaudeHooksSaveOnceConcurrently(t *testing.T) {
 	}
 	payload := fixture(t, "cursor", "capture_single_root", nil)
 	const n = 8
-	msgs := make(chan string, n)
+	replies := make(chan string, n)
 	for i := range n {
 		hook := Cursor
 		if i%2 == 1 {
@@ -531,15 +535,21 @@ func TestCursorAndClaudeHooksSaveOnceConcurrently(t *testing.T) {
 		go func() {
 			var out bytes.Buffer
 			_ = hook(context.Background(), bytes.NewReader(payload), &out, open)
-			var o CursorOutput
-			_ = json.Unmarshal(out.Bytes(), &o)
-			msgs <- o.UserMessage
+			replies <- strings.TrimSpace(out.String())
 		}()
 	}
+	confirmed := 0
 	for range n {
-		if m := <-msgs; m != "✓ Jotted #1" {
-			t.Errorf("reply %q, want ✓ Jotted #1", m)
+		switch r := <-replies; r {
+		case `{"continue":false,"user_message":"✓ Jotted #1"}`:
+			confirmed++
+		case `{"continue":false}`:
+		default:
+			t.Errorf("reply %q", r)
 		}
+	}
+	if confirmed != 1 {
+		t.Errorf("%d hooks confirmed, want 1", confirmed)
 	}
 	if es := entries(t, path); len(es) != 1 {
 		t.Fatalf("saved %d entries, want 1", len(es))
