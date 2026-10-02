@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -100,6 +101,52 @@ func TestFind(t *testing.T) {
 	}
 	if _, _, err := svc.Find(ctx, "  "); err == nil {
 		t.Fatal("empty query should fail")
+	}
+}
+
+func TestSessionsResumeFromStartDir(t *testing.T) {
+	svc := sessionService(t)
+	ctx := context.Background()
+	transcript := filepath.Join(t.TempDir(), "c1.jsonl")
+	lines := `{"type":"summary","summary":"no cwd here"}` + "\n" +
+		`{"type":"user","cwd":"/work"}` + "\n" +
+		`{"type":"user","cwd":"/work/api-wt"}` + "\n"
+	if err := os.WriteFile(transcript, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	capture := func(source, session, path, text string) {
+		t.Helper()
+		req := CaptureRequest{Text: text, Source: source, SessionID: session, Cwd: "/work/api-wt",
+			Metadata: map[string]any{"transcript_path": path}}
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	capture("claude", "c1", transcript, "moved into a worktree")
+	capture("claude", "c2", filepath.Join(t.TempDir(), "gone.jsonl"), "transcript deleted")
+	capture("codex", "x1", transcript, "codex resumes from anywhere")
+
+	ss, err := svc.Sessions(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, s := range ss {
+		got[s.ID] = s.Cwd
+	}
+	want := map[string]string{"c1": "/work", "c2": "/work/api-wt", "x1": "/work/api-wt"}
+	for id, cwd := range want {
+		if got[id] != cwd {
+			t.Errorf("Sessions %s: cwd %q, want %q", id, got[id], cwd)
+		}
+	}
+
+	found, _, err := svc.Find(ctx, "worktree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || found[0].Cwd != "/work" {
+		t.Fatalf("Find: %+v", found)
 	}
 }
 

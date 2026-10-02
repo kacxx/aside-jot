@@ -1,8 +1,11 @@
 package app
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"sort"
 	"strings"
 )
@@ -14,7 +17,9 @@ const SessionPrefix = "session:"
 type Session struct {
 	Source string
 	ID     string
-	// Cwd is the working directory of the session's first jot that has one.
+	// Cwd is where the session resumes from: for Claude Code, the directory
+	// the session started in, read from its transcript; otherwise, or if the
+	// transcript is gone, the working directory of its first jot that has one.
 	Cwd   string
 	Jots  []Entry // oldest first
 	Label Entry   // the newest "session:" jot, else the first jot
@@ -49,7 +54,8 @@ func (s Session) ResumeCommand() string {
 	if s.Cwd == "" {
 		return cmd
 	}
-	// Claude Code stores sessions per project directory, so resume from there.
+	// Claude Code stores sessions under the directory they started in, so
+	// resume from there.
 	return "cd " + shellQuote(s.Cwd) + " && " + cmd
 }
 
@@ -64,6 +70,7 @@ func (s *Service) Sessions(ctx context.Context, n int) ([]Session, error) {
 	if n > 0 && len(ss) > n {
 		ss = ss[:n]
 	}
+	setStartDirs(ss)
 	return ss, nil
 }
 
@@ -101,7 +108,55 @@ func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error
 			found = append(found, ss)
 		}
 	}
+	setStartDirs(found)
 	return found, loose, nil
+}
+
+// setStartDirs sets each Claude Code session's Cwd to the directory it
+// started in. A jot's cwd is wherever the agent was when it was captured,
+// which may be a directory it moved to later.
+func setStartDirs(ss []Session) {
+	for i := range ss {
+		if ss[i].Source != "claude" {
+			continue
+		}
+		for _, e := range ss[i].Jots {
+			var meta struct {
+				TranscriptPath string `json:"transcript_path"`
+			}
+			if json.Unmarshal(e.Metadata, &meta) != nil || meta.TranscriptPath == "" {
+				continue
+			}
+			if dir := transcriptStartDir(meta.TranscriptPath); dir != "" {
+				ss[i].Cwd = dir
+				break
+			}
+		}
+	}
+}
+
+// transcriptStartDir returns the first cwd recorded in a Claude Code
+// transcript (JSON lines), or "" if there is none in its first records.
+func transcriptStartDir(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	r := bufio.NewReader(f)
+	for range 100 {
+		line, err := r.ReadBytes('\n')
+		var rec struct {
+			Cwd string `json:"cwd"`
+		}
+		if json.Unmarshal(line, &rec) == nil && rec.Cwd != "" {
+			return rec.Cwd
+		}
+		if err != nil {
+			return ""
+		}
+	}
+	return ""
 }
 
 type sessionKey struct{ source, id string }
