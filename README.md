@@ -192,10 +192,11 @@ Claude Code's session-title model does, above). Codex reports a few seconds of
 >
 > Cursor has reproduced the bug and is tracking it, with no date for a fix.
 > Cursor recommends clicking the blocked message, editing it into the prompt you
-> want to send, and resending; it says the edit replaces the jot. aside has not
-> checked that the jot then stays out of the model's context. Starting a new
-> chat avoids the leak as tested, since the jot is sent with the next message in
-> the same chat.
+> want to send, and resending. On Cursor 3.23.12 this kept the jot out of the
+> model's context: after editing a blocked jot (#19) into a question, the model
+> said it was the first message, and on the next turn quoted only the two
+> messages sent after it. Starting a new chat also avoids the leak, since the
+> jot is sent with the next message in the same chat.
 >
 > `aside hook cursor` stays in the binary, and the setup and test notes below
 > are kept for when Cursor fixes the bug.
