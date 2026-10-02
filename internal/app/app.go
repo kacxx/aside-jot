@@ -63,6 +63,10 @@ type CaptureRequest struct {
 	SessionID string
 	Cwd       string
 	Metadata  map[string]any
+	// OnceKey, if set, names a string Metadata key that identifies the prompt
+	// (e.g. Cursor's generation_id). A second capture from the same Source
+	// with the same value returns the first entry instead of saving again.
+	OnceKey string
 }
 
 // Capture stores a jot with best-effort git context for req.Cwd.
@@ -89,6 +93,12 @@ func (s *Service) Capture(ctx context.Context, req CaptureRequest) (Entry, error
 			return Entry{}, err
 		}
 		e.Metadata = b
+	}
+	if v, _ := req.Metadata[req.OnceKey].(string); req.OnceKey != "" && v != "" {
+		if _, err := s.store.InsertOnce(ctx, &e, req.OnceKey, v); err != nil {
+			return Entry{}, err
+		}
+		return e, nil
 	}
 	if _, err := s.store.Insert(ctx, &e); err != nil {
 		return Entry{}, err

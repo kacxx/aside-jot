@@ -22,18 +22,21 @@ type CursorOutput struct {
 	UserMessage string `json:"user_message,omitempty"`
 }
 
-// Cursor handles a Cursor beforeSubmitPrompt hook. Unlike Claude Code and
+// cursorHook handles a Cursor beforeSubmitPrompt hook. Unlike Claude Code and
 // Codex, Cursor expects a reply on every prompt, so pass-through answers
 // {"continue":true}.
+var cursorHook = promptHook{
+	event: "beforeSubmitPrompt",
+	pass:  CursorOutput{Continue: true},
+	block: func(reason string) any {
+		return CursorOutput{Continue: false, UserMessage: reason}
+	},
+	parse: parseCursor,
+}
+
+// Cursor handles a Cursor beforeSubmitPrompt hook.
 func Cursor(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error {
-	return promptHook{
-		event: "beforeSubmitPrompt",
-		pass:  CursorOutput{Continue: true},
-		block: func(reason string) any {
-			return CursorOutput{Continue: false, UserMessage: reason}
-		},
-		parse: parseCursor,
-	}.run(ctx, r, w, open)
+	return cursorHook.run(ctx, r, w, open)
 }
 
 func parseCursor(data []byte) (event, prompt string, build func() app.CaptureRequest, err error) {
@@ -62,12 +65,18 @@ func parseCursor(data []byte) (event, prompt string, build func() app.CaptureReq
 			// Several roots: record them all rather than guess which one is meant.
 			meta["workspace_roots"] = roots
 		}
-		return app.CaptureRequest{
+		req := app.CaptureRequest{
 			Source:    "cursor",
 			SessionID: in.ConversationID,
 			Cwd:       cwd,
 			Metadata:  meta,
 		}
+		// Cursor runs both `aside hook cursor` and an imported `aside hook
+		// claude` on the same prompt; the generation id makes them save it once.
+		if in.GenerationID != "" {
+			req.OnceKey = "generation_id"
+		}
+		return req
 	}
 	return in.HookEventName, in.Prompt, build, nil
 }
