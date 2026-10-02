@@ -6,7 +6,8 @@ Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locall
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
 In Cursor, a blocked jot stays in the chat and is sent to the model with your
-next message there ([#25](https://github.com/kacxx/aside-jot/issues/25)).
+next message there ([#25](https://github.com/kacxx/aside-jot/issues/25)), so
+Cursor support is partial: see [Cursor hook](#cursor-hook).
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -167,12 +168,24 @@ forward-slash path above:
   turn id and model in metadata.
 - Codex can read jots through the `aside` MCP server's `inbox` tool.
 
-Not yet verified: whether a blocked prompt still appears in Codex's session
-history, and whether anything sees the prompt before the hook runs (as Claude
-Code's session-title model does, above). Codex reports a few seconds of "Worked
-for" time on a blocked prompt, though no model reply appears.
+With Codex CLI v0.159.2 on macOS, a blocked jot (#18) was not added to the
+session's conversation history: the session file, which records the history
+Codex replays on resume, has no trace of it. The model's reply to a follow-up
+question was not checked.
+
+Not yet verified: whether anything sees the prompt before the hook runs (as
+Claude Code's session-title model does, above). Codex reports a few seconds of
+"Worked for" time on a blocked prompt, though no model reply appears.
 
 ## Cursor hook
+
+> **Cursor support is partial.** Jots are saved and the turn is blocked, but
+> Cursor keeps the blocked prompt in the chat and sends it to the model with
+> your next message there
+> ([#25](https://github.com/kacxx/aside-jot/issues/25)). This is a
+> [known Cursor bug](https://forum.cursor.com/t/prompt-blocked-by-a-beforesubmitprompt-hook-is-still-sent-to-the-model-with-the-next-message/173565).
+> Until it is fixed, start a new chat after a jot if the model must not
+> see it, or jot from a terminal with `aside add`.
 
 Add to `~/.cursor/hooks.json` (or `<project>/.cursor/hooks.json`):
 
@@ -236,8 +249,9 @@ Verified live on Cursor 3.23.12, macOS, after the fix for #23. A `>>` prompt was
 blocked and saved once in each setup:
 
 - Both hooks: jot #13. Both hooks replied `{"continue":false}` and Cursor
-  logged "Merged 2 valid response(s)". That build showed `✓ Jotted #13` twice;
-  the hook that finds the jot already saved now replies without a message.
+  logged "Merged 2 valid response(s)". That build showed `✓ Jotted #13` twice.
+- Both hooks again, with the hook that finds the jot already saved replying
+  without a message: jot #17, and `✓ Jotted #17` appeared once.
 - Only `aside hook claude`, imported by Cursor: jot #14, saved with
   `source: cursor`.
 - Only `aside hook cursor`: jot #15.
