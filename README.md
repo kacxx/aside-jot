@@ -190,6 +190,12 @@ Claude Code's session-title model does, above). Codex reports a few seconds of
 > instead. Cursor also runs the Claude Code hook from
 > `~/.claude/settings.json`, so the same applies if only that one is installed.
 >
+> Cursor has reproduced the bug and is tracking it, with no date for a fix. If
+> you do jot in Cursor, Cursor's workaround keeps the jot out of the model's
+> context: click the blocked message, edit it into the prompt you want to send,
+> and resend. Editing replaces the jot instead of sending it with your next
+> message. Starting a new chat also works.
+>
 > `aside hook cursor` stays in the binary, and the setup and test notes below
 > are kept for when Cursor fixes the bug.
 
