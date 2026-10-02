@@ -354,6 +354,8 @@ aside add <text...>        capture from the terminal (reads stdin if no text)
 aside inbox [-n N]         newest inbox jots (default 20, 0 = all)
 aside show <id>            one jot with its context
 aside search <query...>    substring search over all jots
+aside find <query...>      sessions with a matching jot, and how to resume them
+aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
 aside done <id>            mark done (drops out of the inbox)
 aside promote <id> [--repo owner/name] [--dry-run]
                            turn a jot into a GitHub issue (see Promote)
@@ -363,6 +365,39 @@ aside hook claude|codex|cursor
                            hook entry points (cursor: not supported, see Cursor)
 aside mcp                  read-only MCP server on stdio
 ```
+
+## Finding a session
+
+Every jot captured by a hook records the agent's session id. `aside find`
+groups the jots that match a query by session, so you can get back to the chat
+where you worked on something:
+
+```
+$ aside find SUP-4821
+SUP-4821 token TTL investigation
+  claude · api@main · 3 jots · last 2d (#18)
+  #12   5d     session: SUP-4821 token TTL investigation
+  #18   2d     SUP-4821 needs a backend ticket
+  cd /Users/you/code/api && claude --resume 0f3c9a…
+```
+
+`aside sessions` lists recent sessions the same way, without the matching jots.
+
+- **Label a session** by jotting `>> session: <why>` in it, for example
+  `>> session: SUP-4821 token TTL investigation`. The newest `session:` jot
+  labels the session; without one, its first jot does.
+- **Resume commands** are printed, not run. Claude Code stores a session under
+  the directory it started in, so the command starts with a `cd` there, read
+  from the session's transcript (the jot's directory if the transcript is
+  gone). Codex resumes from any directory, so its sessions get
+  `codex resume <id>` with no `cd`. Cursor isn't supported, so its sessions
+  have no resume command.
+- Done jots are listed with `(done)`, as in `aside search`.
+- **Only chats with a jot in them are listed.** A chat where you never jotted
+  doesn't appear. Starting a ticket's chat with a `session:` jot makes it
+  findable.
+- Jots from `aside add` have no session. `find` lists matching ones under
+  "Not in a session".
 
 ## Promote
 
