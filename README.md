@@ -5,6 +5,8 @@ A side channel for thoughts while you work with coding agents.
 Type `>> some thought` into Claude Code, Codex or Cursor and it is stored locally with
 its git context (repo, branch, commit), and the prompt is **blocked**, so the
 model never sees it. Your flow isn't interrupted and the agent's context stays clean.
+In Cursor, a blocked jot stays in the chat and is sent to the model with your
+next message there ([#25](https://github.com/kacxx/aside-jot/issues/25)).
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
@@ -195,10 +197,10 @@ and the Claude hook printing nothing, the prompt reached the model even though
 the jot was blocked ([#23](https://github.com/kacxx/aside-jot/issues/23)). So on
 that event `aside hook claude` now replies exactly as `aside hook cursor` does:
 it blocks jots and answers `{"continue":true}` to every other prompt. Either
-hook should be enough in Cursor, and both together should be safe. If both run
-on one prompt, the jot is saved once, keyed on Cursor's `generation_id`. Only
-the hook that saved it shows `✓ Jotted #N`; the other blocks without a message,
-so Cursor doesn't show the confirmation twice. After any change, type `>> test`
+hook is enough in Cursor, and both together are safe. If both run on one
+prompt, the jot is saved once, keyed on Cursor's `generation_id`. Only the hook
+that saved it shows `✓ Jotted #N`; the other blocks without a message, so
+Cursor doesn't show the confirmation twice. After any change, type `>> test`
 and check you get `✓ Jotted #N` rather than a model reply.
 
 On a jot the hook returns `{"continue":false,"user_message":"✓ Jotted #N"}`.
@@ -229,6 +231,19 @@ before the fix for #23, while the Claude hook was silent on `beforeSubmitPrompt`
   or commit, and the workspace roots in metadata.
 - Live on 3.23.12 with the Claude hook removed, `>> test` returned
   `✓ Jotted #10` and the model did not reply.
+
+Verified live on Cursor 3.23.12, macOS, after the fix for #23. A `>>` prompt was
+blocked and saved once in each setup:
+
+- Both hooks: jot #13. Both hooks replied `{"continue":false}` and Cursor
+  logged "Merged 2 valid response(s)". That build showed `✓ Jotted #13` twice;
+  the hook that finds the jot already saved now replies without a message.
+- Only `aside hook claude`, imported by Cursor: jot #14, saved with
+  `source: cursor`.
+- Only `aside hook cursor`: jot #15.
+- After the both-hooks and Claude-only runs, the next message in that chat sent
+  the blocked jot to the model with it
+  ([#25](https://github.com/kacxx/aside-jot/issues/25)).
 
 ## MCP server (read-only)
 

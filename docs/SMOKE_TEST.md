@@ -103,8 +103,8 @@ essentially process start-up.
 3. In Cursor, type `>> hello from cursor`. You should see `✓ Jotted #N`, and
    the model should not reply. Check this with only the Cursor hook, with only
    the Claude hook, and with both
-   ([#23](https://github.com/kacxx/aside-jot/issues/23)); with both, `aside
-   inbox` must show the jot once.
+   ([#23](https://github.com/kacxx/aside-jot/issues/23)); with both, `✓ Jotted
+   #N` must appear once and `aside inbox` must show the jot once.
 4. In Codex, trust the hook in `/hooks` first, then type `>> hello from codex`.
    You should see the same, and Codex should not start a turn.
 5. In each tool, type `what does >> do in bash?`. It must go to the model as
