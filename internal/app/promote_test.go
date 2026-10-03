@@ -338,7 +338,9 @@ func TestPromoteWithReplyErrors(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	empty := filepath.Join(dir, "empty.jsonl")
-	os.WriteFile(empty, []byte(`{"type":"user","timestamp":"2026-09-30T11:00:00Z"}`+"\n"), 0o600)
+	if err := os.WriteFile(empty, []byte(`{"type":"user","timestamp":"2026-09-30T11:00:00Z"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name, source string
 		meta         map[string]any
