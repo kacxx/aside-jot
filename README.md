@@ -479,3 +479,5 @@ golangci-lint run   # v2.14.0, config in .golangci.yml
 See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against
 the built binary, and [docs/mvp-validation.md](docs/mvp-validation.md) for the
 recorded results (tests, end-to-end run and hook latency) of the initial version.
+[AGENTS.md](AGENTS.md) is the starting point for coding agents, and
+[docs/decisions.md](docs/decisions.md) records why aside works the way it does.

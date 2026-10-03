@@ -88,6 +88,64 @@ printf '%s\n' \
   | bin/aside mcp
 ```
 
+## Find and sessions
+
+Use a fresh database so the jot numbers match. The Claude session starts in
+`start` and the agent then moves into `start/wt`; the transcript records both,
+and the resume command must `cd` to `start`. The folder name has a space and
+an apostrophe to check quoting.
+
+```sh
+export JOT_DB="$(mktemp -d)/jot.db"
+start="$(dirname "$JOT_DB")/proj dir's"; mkdir -p "$start/wt"
+tr="$(dirname "$JOT_DB")/c1.jsonl"
+jq -nc --arg c "$start" '{type:"user",cwd:$c}' > "$tr"
+jq -nc --arg c "$start/wt" '{type:"user",cwd:$c}' >> "$tr"
+jot() { jq -c --arg s "$2" --arg c "$3" --arg p "$4" --arg t "$tr" \
+  '.session_id=$s | .cwd=$c | .prompt=$p | .transcript_path=$t' \
+  testdata/hooks/$1/capture.json | bin/aside hook $1 >/dev/null; }
+jot claude c1 "$start/wt" ">> session: SUP-4821 token TTL"
+jot claude c1 "$start/wt" ">> SUP-4821 needs a backend ticket"
+jot codex x1 /tmp/deleted ">> SUP-4821 retry in codex"
+bin/aside add "SUP-4821 from the terminal" >/dev/null
+bin/aside done 2 >/dev/null
+bin/aside find sup-4821
+```
+
+Expected, newest session first. Jot #2 is marked `(done)`, Codex has no `cd`,
+and the Claude `cd` is the starting folder, not `wt`:
+
+```
+SUP-4821 retry in codex
+  codex · 1 jot · last today (#3)
+  #3    today  SUP-4821 retry in codex
+  codex resume x1
+
+SUP-4821 token TTL
+  claude · 2 jots · last today (#2)
+  #1    today  session: SUP-4821 token TTL
+  #2    today  SUP-4821 needs a backend ticket  (done)
+  cd '/…/proj dir'\''s' && claude --resume c1
+
+Not in a session:
+#4    …  SUP-4821 from the terminal  […]
+```
+
+Then check that the printed `cd` works, and the other commands:
+
+```sh
+sh -c "$(bin/aside sessions | grep 'claude --resume' | sed 's/ && claude.*/ \&\& pwd/')"
+# /…/proj dir's
+bin/aside sessions -n 1     # only the Codex session
+bin/aside find nope         # No jots match "nope".
+bin/aside find "  "         # aside: empty search query (exit 1)
+```
+
+Against your real database (read-only), check that each printed resume command
+points at a session that exists: Claude Code sessions are
+`~/.claude/projects/<start folder, non-alphanumerics as ->/<id>.jsonl`, and
+Codex sessions are under `~/.codex/sessions`.
+
 ## Latency of the non-match path
 
 ```sh
