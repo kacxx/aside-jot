@@ -40,7 +40,7 @@ Usage:
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
   aside done <id>            mark a jot as done
-  aside promote <id> [--repo owner/name] [--dry-run]
+  aside promote <id> [--repo owner/name] [--with-reply] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
@@ -258,11 +258,12 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, w io.Write
 	fs.SetOutput(io.Discard)
 	repo := fs.String("repo", "", "target repository, owner/name")
 	dryRun := fs.Bool("dry-run", false, "print the issue without creating it")
+	withReply := fs.Bool("with-reply", false, "include the agent's last reply before the jot (Claude Code only)")
 	// Flags may come before or after the id.
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
-			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--with-reply] [--dry-run])", err)
 		}
 		if fs.NArg() == 0 {
 			break
@@ -272,9 +273,9 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, w io.Write
 	}
 	id, err := parseID(pos)
 	if err != nil {
-		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--with-reply] [--dry-run])", err)
 	}
-	p, err := svc.Promote(ctx, promoteRunner, app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun})
+	p, err := svc.Promote(ctx, promoteRunner, app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun, WithReply: *withReply})
 	if errors.Is(err, app.ErrNotFound) {
 		return fmt.Errorf("no jot #%d", id)
 	}
