@@ -83,8 +83,9 @@ behaviour: [docs/setup.md](docs/setup.md).
 - **Lunch.** `aside inbox` lists them, newest first, with the repo and branch
   each came from. You fix the flaky test and run `aside done 23`.
 - **Afternoon.** The ticket note deserves an issue. Since you jotted it in
-  Claude Code, `aside promote 21 --with-reply` shows you an issue with your jot and the
-  agent's explanation, and creates it in that repo when you say yes.
+  Claude Code, `aside promote 21 --with-reply` shows you an issue with your jot
+  and what the agent had just said when you jotted it, and creates it in that
+  repo when you say yes.
 - **Friday.** Someone asks about SUP-4821. `aside find SUP-4821` lists the
   chats where you jotted about it, with the command to reopen each one.
 
