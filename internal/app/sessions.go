@@ -94,7 +94,9 @@ func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error
 		return nil, nil, err
 	}
 	if ticketKeyShape.MatchString(q) {
-		whole := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(q) + `\b`)
+		// Not \b: it counts "_" as part of a word, which would miss
+		// SUP-4821_cache.
+		whole := regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])` + regexp.QuoteMeta(q) + `(?:[^A-Za-z0-9]|$)`)
 		kept := matches[:0]
 		for _, e := range matches {
 			if whole.MatchString(e.Text) {

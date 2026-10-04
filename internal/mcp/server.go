@@ -208,6 +208,10 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 
 const maxLimit = 200
 
+// maxSessionMatches caps the matching jots find returns per session, so a
+// broad query can't return every jot of every session.
+const maxSessionMatches = 5
+
 var tools = []map[string]any{
 	{
 		"name":        "inbox",
@@ -250,11 +254,16 @@ var tools = []map[string]any{
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
 			"branch, and resume_command to reopen it (the user runs it; this tool doesn't). Only chats with " +
-			"a jot in them are found.",
+			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
+			"total_sessions and total_not_in_a_session are the counts before the cut. Each session lists its " +
+			fmt.Sprint(maxSessionMatches) + " newest matching jots (oldest first), and match_count is how many matched.",
 		"inputSchema": map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"query": map[string]any{"type": "string", "minLength": 1}},
-			"required":   []string{"query"},
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{"type": "string", "minLength": 1},
+				"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": 20},
+			},
+			"required": []string{"query"},
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
 	},
@@ -306,6 +315,8 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		var ss []app.Session
 		var loose []app.Entry
 		ss, loose, err = s.svc.Find(ctx, args.Query)
+		total := map[string]any{"total_sessions": len(ss), "total_not_in_a_session": len(loose)}
+		ss, loose = ss[:min(len(ss), args.Limit)], loose[:min(len(loose), args.Limit)]
 		sessions := []map[string]any{}
 		for _, x := range ss {
 			latest := x.Latest()
@@ -317,11 +328,13 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 				"branch":         latest.Branch,
 				"cwd":            x.Cwd,
 				"last_active":    latest.CreatedAt,
-				"matches":        nonNil(x.Matches),
+				"match_count":    len(x.Matches),
+				"matches":        nonNil(x.Matches[max(0, len(x.Matches)-maxSessionMatches):]),
 				"resume_command": x.ResumeCommand(),
 			})
 		}
-		v = map[string]any{"sessions": sessions, "not_in_a_session": nonNil(loose)}
+		total["sessions"], total["not_in_a_session"] = sessions, nonNil(loose)
+		v = total
 	default:
 		return nil, &rpcError{Code: codeInvalidParams, Message: "unknown tool: " + name}
 	}
