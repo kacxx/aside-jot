@@ -293,27 +293,22 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run])", err)
 	}
 	req := app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun, WithReply: *withReply}
-	if *withReply && !*dryRun && !*yes {
+	if *withReply && !*yes {
 		// The reply comes from a transcript that may hold secrets, so show
 		// exactly what would be posted and ask first.
-		preview := req
-		preview.DryRun = true
-		p, err := svc.Promote(ctx, promoteRunner, preview)
-		if errors.Is(err, app.ErrNotFound) {
-			return fmt.Errorf("no jot #%d", id)
-		}
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
-		answer, _ := bufio.NewReader(stdin).ReadString('\n')
-		if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
-			return errors.New("not created (pass --yes to skip this question)")
+		req.Confirm = func(p app.Promotion) bool {
+			fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
+			answer, _ := bufio.NewReader(stdin).ReadString('\n')
+			a := strings.ToLower(strings.TrimSpace(answer))
+			return a == "y" || a == "yes"
 		}
 	}
 	p, err := svc.Promote(ctx, promoteRunner, req)
 	if errors.Is(err, app.ErrNotFound) {
 		return fmt.Errorf("no jot #%d", id)
+	}
+	if errors.Is(err, app.ErrNotConfirmed) {
+		return errors.New("not created (pass --yes to skip this question)")
 	}
 	if err != nil {
 		return err

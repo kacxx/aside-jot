@@ -330,11 +330,22 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "note", Source: "claude",
-		Metadata: map[string]any{"transcript_path": transcript}}); err != nil {
-		t.Fatal(err)
+	for _, text := range []string{"note", "second note"} {
+		if _, err := svc.Capture(ctx, app.CaptureRequest{Text: text, Source: "claude",
+			Metadata: map[string]any{"transcript_path": transcript}}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	svc.Close()
+	issues := func() int {
+		n := 0
+		for _, c := range f.calls {
+			if strings.HasPrefix(c, "gh issue") {
+				n++
+			}
+		}
+		return n
+	}
 
 	aside := func(stdin string, args ...string) (string, error) {
 		var out bytes.Buffer
@@ -348,12 +359,22 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 			t.Fatalf("declined %q: %q, %v", answer, out, err)
 		}
 	}
-	if len(f.calls) != 0 {
+	if issues() != 0 {
 		t.Fatalf("declined promote ran %v", f.calls)
+	}
+	// A dry run prints the body without asking.
+	if out, err := aside("", "promote", "1", "--repo", "o/n", "--with-reply", "--dry-run"); err != nil ||
+		!strings.Contains(out, "the diagnosis") || strings.Contains(out, "[y/N]") || issues() != 0 {
+		t.Fatalf("dry run: %q, %v", out, err)
 	}
 	// Confirmed.
 	if out, err := aside("y\n", "promote", "1", "--repo", "o/n", "--with-reply"); err != nil ||
-		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") {
+		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") || issues() != 1 {
 		t.Fatalf("confirmed: %q, %v", out, err)
+	}
+	// --yes creates without asking or reading stdin.
+	if out, err := aside("", "promote", "2", "--repo", "o/n", "--with-reply", "--yes"); err != nil ||
+		strings.Contains(out, "[y/N]") || issues() != 2 {
+		t.Fatalf("--yes: %q, %v", out, err)
 	}
 }
