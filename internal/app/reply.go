@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kacxx/aside-jot/internal/capture"
 )
 
 // maxReplyRunes caps a reply put in an issue body, so a huge one does not
@@ -19,8 +21,8 @@ const maxReplyRunes = 8000
 // was captured: all the assistant text recorded since the last real user
 // prompt. Claude Code writes each content block of a message as its own
 // record, and a multi-step turn is many messages with tool calls between, so
-// the reply is the text blocks of all of them, in order. Tool results come
-// back as user records but are not prompts. The jot's own prompt is blocked,
+// the reply is the text blocks of all of them, in order. Which user records
+// start a turn is decided by userRecordKind. The jot's own prompt is blocked,
 // so it is not in the transcript; the time alone says where it falls.
 func replyBefore(path string, t time.Time) (string, error) {
 	f, err := os.Open(path)
@@ -29,6 +31,8 @@ func replyBefore(path string, t time.Time) (string, error) {
 	}
 	defer f.Close()
 	var parts []string
+	// A slash command starts a new turn only once the agent answers it.
+	commandPending := false
 	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
@@ -46,14 +50,18 @@ func replyBefore(path string, t time.Time) (string, error) {
 			if perr == nil && !ts.After(t) {
 				switch rec.Type {
 				case "assistant":
-					if text := contentText(rec.Message.Content, "text"); text != "" {
+					if text := strings.TrimSpace(contentText(rec.Message.Content, "text")); text != "" {
+						if commandPending {
+							parts, commandPending = nil, false
+						}
 						parts = append(parts, text)
 					}
 				case "user":
-					// A prompt starts a new turn. A tool result does not, and
-					// neither does a jot (">>"), which is blocked from the model.
-					if text := contentText(rec.Message.Content, "text"); text != "" && !strings.HasPrefix(text, ">>") {
-						parts = nil
+					switch userRecordKind(contentText(rec.Message.Content, "text")) {
+					case userPrompt:
+						parts, commandPending = nil, false
+					case userCommand:
+						commandPending = true
 					}
 				}
 			}
@@ -71,12 +79,57 @@ func replyBefore(path string, t time.Time) (string, error) {
 	return strings.Join(parts, "\n\n"), nil
 }
 
-// contentText joins the blocks of the given type in a message's content,
-// which is either a string or a list of typed blocks.
+type userKind int
+
+const (
+	userOther   userKind = iota // not typed by the user as a request
+	userPrompt                  // a prompt; starts a new turn
+	userCommand                 // a slash command; may or may not get a reply
+)
+
+// notPrompts are the starts of user records that Claude Code writes itself.
+// None starts a turn: an interrupt leaves the interrupted turn as the reply,
+// a background task's notification arrives in the middle of one, and a local
+// command's output is not something the agent answers.
+var notPrompts = []string{
+	"[Request interrupted by user",
+	"<task-notification>",
+	"<local-command-stdout>",
+	"<local-command-stderr>",
+}
+
+// userRecordKind classifies the text of a user record. Tool results have no
+// text and jots never reach the model, so neither is a prompt. A slash
+// command is recorded the same way whether it is local, like /model, or
+// expands to a prompt the agent answers, like a skill, so the caller decides
+// from what follows.
+func userRecordKind(text string) userKind {
+	if strings.TrimSpace(text) == "" {
+		return userOther
+	}
+	if _, ok := capture.Match(text); ok {
+		return userOther
+	}
+	t := strings.TrimSpace(text)
+	for _, p := range notPrompts {
+		if strings.HasPrefix(t, p) {
+			return userOther
+		}
+	}
+	if strings.HasPrefix(t, "<command-name>") || strings.HasPrefix(t, "<command-message>") {
+		return userCommand
+	}
+	return userPrompt
+}
+
+// contentText joins the non-blank blocks of the given type in a message's
+// content, which is either a string or a list of typed blocks. The text is
+// not trimmed, so a jot can be told apart from a prompt that only looks like
+// one after trimming.
 func contentText(raw json.RawMessage, kind string) string {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
-		return strings.TrimSpace(s)
+		return s
 	}
 	var blocks []struct {
 		Type string `json:"type"`
@@ -88,20 +141,47 @@ func contentText(raw json.RawMessage, kind string) string {
 	var parts []string
 	for _, b := range blocks {
 		if b.Type == kind && strings.TrimSpace(b.Text) != "" {
-			parts = append(parts, strings.TrimSpace(b.Text))
+			parts = append(parts, b.Text)
 		}
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// truncateReply cuts s to maxReplyRunes, noting the cut.
+// truncateReply cuts s to maxReplyRunes, noting the cut. A code block left
+// open by the cut is closed, or the note and the rest of the issue body would
+// render as code.
 func truncateReply(s string) string {
 	rs := []rune(s)
 	if len(rs) <= maxReplyRunes {
 		return s
 	}
-	return strings.TrimSpace(string(rs[:maxReplyRunes])) +
-		fmt.Sprintf("\n\n_[reply cut: showing the first %d of %d characters]_", maxReplyRunes, len(rs))
+	cut := strings.TrimSpace(string(rs[:maxReplyRunes]))
+	if fence := openFence(cut); fence != "" {
+		cut += "\n" + fence
+	}
+	return cut + fmt.Sprintf("\n\n_[reply cut: showing the first %d of %d characters]_", maxReplyRunes, len(rs))
+}
+
+// openFence returns the fence (such as "```") of a fenced code block that s
+// opens and does not close, or "" if there is none.
+func openFence(s string) string {
+	open := ""
+	for _, line := range strings.Split(s, "\n") {
+		l := strings.TrimLeft(line, " ")
+		if open != "" {
+			if strings.HasPrefix(l, open) && strings.Trim(strings.TrimRight(l, " \t"), open[:1]) == "" {
+				open = ""
+			}
+			continue
+		}
+		for _, c := range []string{"`", "~"} {
+			if strings.HasPrefix(l, c+c+c) {
+				open = l[:len(l)-len(strings.TrimLeft(l, c))]
+				break
+			}
+		}
+	}
+	return open
 }
 
 // agentReply finds the reply to attach for jot e, or says why it cannot.
