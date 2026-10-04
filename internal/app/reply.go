@@ -15,17 +15,20 @@ import (
 // bury the jot or exceed GitHub's body limit.
 const maxReplyRunes = 8000
 
-// replyBefore returns the text of the last assistant message recorded in a
-// Claude Code transcript (JSON lines) at or before t, which is when the jot
-// was captured. The jot's own prompt is blocked, so it is not in the
-// transcript; the time alone says where it falls.
+// replyBefore returns the agent's reply before time t, which is when the jot
+// was captured: all the assistant text recorded since the last real user
+// prompt. Claude Code writes each content block of a message as its own
+// record, and a multi-step turn is many messages with tool calls between, so
+// the reply is the text blocks of all of them, in order. Tool results come
+// back as user records but are not prompts. The jot's own prompt is blocked,
+// so it is not in the transcript; the time alone says where it falls.
 func replyBefore(path string, t time.Time) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("cannot read transcript: %w", err)
 	}
 	defer f.Close()
-	var reply string
+	var parts []string
 	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
@@ -33,19 +36,25 @@ func replyBefore(path string, t time.Time) (string, error) {
 			Type        string `json:"type"`
 			Timestamp   string `json:"timestamp"`
 			IsSidechain bool   `json:"isSidechain"`
+			IsMeta      bool   `json:"isMeta"`
 			Message     struct {
-				Role    string          `json:"role"`
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
 		}
-		if json.Unmarshal(line, &rec) == nil && rec.Type == "assistant" && !rec.IsSidechain {
+		if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain && !rec.IsMeta {
 			ts, perr := time.Parse(time.RFC3339Nano, rec.Timestamp)
-			if perr == nil && ts.After(t) {
-				break // records are in time order
-			}
-			if perr == nil {
-				if text := assistantText(rec.Message.Content); text != "" {
-					reply = text
+			if perr == nil && !ts.After(t) {
+				switch rec.Type {
+				case "assistant":
+					if text := contentText(rec.Message.Content, "text"); text != "" {
+						parts = append(parts, text)
+					}
+				case "user":
+					// A prompt starts a new turn. A tool result does not, and
+					// neither does a jot (">>"), which is blocked from the model.
+					if text := contentText(rec.Message.Content, "text"); text != "" && !strings.HasPrefix(text, ">>") {
+						parts = nil
+					}
 				}
 			}
 		}
@@ -56,15 +65,15 @@ func replyBefore(path string, t time.Time) (string, error) {
 			break
 		}
 	}
-	if reply == "" {
+	if len(parts) == 0 {
 		return "", errors.New("no agent reply found before the jot in the transcript")
 	}
-	return reply, nil
+	return strings.Join(parts, "\n\n"), nil
 }
 
-// assistantText joins the text blocks of an assistant message's content,
+// contentText joins the blocks of the given type in a message's content,
 // which is either a string or a list of typed blocks.
-func assistantText(raw json.RawMessage) string {
+func contentText(raw json.RawMessage, kind string) string {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
 		return strings.TrimSpace(s)
@@ -78,7 +87,7 @@ func assistantText(raw json.RawMessage) string {
 	}
 	var parts []string
 	for _, b := range blocks {
-		if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+		if b.Type == kind && strings.TrimSpace(b.Text) != "" {
 			parts = append(parts, strings.TrimSpace(b.Text))
 		}
 	}

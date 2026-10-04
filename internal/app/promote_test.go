@@ -290,14 +290,22 @@ func TestPromoteFailuresLeaveJotUnchanged(t *testing.T) {
 	}
 }
 
-// replyTranscript has several turns around the jot, which is captured at
-// 12:00:00Z: the reply right before it must win over earlier and later ones.
+// replyTranscript mimics a real Claude Code transcript: every content block is
+// its own record, a message is split across records sharing a message id, tool
+// results come back as user records, and a sidechain and a record from after the jot
+// (captured at 12:00:00Z) sit among the turn it belongs to.
 const replyTranscript = `{"type":"user","timestamp":"2026-09-30T11:00:00Z","message":{"role":"user","content":"look at sessions"}}
-{"type":"assistant","timestamp":"2026-09-30T11:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"early reply"}]}}
-{"type":"assistant","timestamp":"2026-09-30T11:59:00Z","message":{"role":"assistant","content":[{"type":"text","text":"Found it: resume cds into the wrong folder."},{"type":"tool_use","name":"Bash"},{"type":"text","text":"Evidence: cwd moved."}]}}
-{"type":"assistant","timestamp":"2026-09-30T11:59:30Z","isSidechain":true,"message":{"role":"assistant","content":[{"type":"text","text":"subagent chatter"}]}}
-{"type":"assistant","timestamp":"2026-09-30T11:59:40Z","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read"}]}}
-{"type":"assistant","timestamp":"2026-09-30T12:05:00Z","message":{"role":"assistant","content":[{"type":"text","text":"later reply"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"early reply"}]}}
+{"type":"user","timestamp":"2026-09-30T11:58:00Z","message":{"role":"user","content":[{"type":"text","text":"why is resume cd wrong?"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:58:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"text","text":"Let me check."}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:58:06Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash"}]}}
+{"type":"user","timestamp":"2026-09-30T11:58:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:00Z","message":{"id":"m3","role":"assistant","content":[{"type":"text","text":"Found it: resume cds into the wrong folder."}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:01Z","message":{"id":"m3","role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read"}]}}
+{"type":"user","timestamp":"2026-09-30T11:59:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:30Z","isSidechain":true,"message":{"id":"s1","role":"assistant","content":[{"type":"text","text":"subagent chatter"}]}}
+{"type":"assistant","timestamp":"2026-09-30T12:05:00Z","message":{"id":"m5","role":"assistant","content":[{"type":"text","text":"later reply"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:40Z","message":{"id":"m4","role":"assistant","content":[{"type":"text","text":"Evidence: cwd moved."}]}}
 `
 
 func TestPromoteWithReply(t *testing.T) {
@@ -317,11 +325,11 @@ func TestPromoteWithReply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "resume uses wrong folder\n\n## Agent reply\n\nFound it: resume cds into the wrong folder.\n\nEvidence: cwd moved.\n\nCaptured "
+	want := "resume uses wrong folder\n\n## Agent reply\n\nLet me check.\n\nFound it: resume cds into the wrong folder.\n\nEvidence: cwd moved.\n\nCaptured "
 	if !strings.HasPrefix(p.Body, want) {
 		t.Fatalf("body:\n%s", p.Body)
 	}
-	for _, bad := range []string{"early reply", "later reply", "subagent"} {
+	for _, bad := range []string{"early reply", "later reply", "subagent", "tool_use"} {
 		if strings.Contains(p.Body, bad) {
 			t.Errorf("body has %q", bad)
 		}
