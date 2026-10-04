@@ -115,3 +115,63 @@ func TestServiceFlow(t *testing.T) {
 		t.Fatalf("show: %+v", got)
 	}
 }
+
+func TestAgeDaysCalendarDays(t *testing.T) {
+	ref := time.Date(2026, 10, 3, 0, 10, 0, 0, time.Local)
+	for _, tc := range []struct {
+		name string
+		t    time.Time
+		want int
+	}{
+		{"same day", time.Date(2026, 10, 3, 0, 5, 0, 0, time.Local), 0},
+		{"23:50 yesterday is 1d", time.Date(2026, 10, 2, 23, 50, 0, 0, time.Local), 1},
+		{"a week ago", time.Date(2026, 9, 26, 12, 0, 0, 0, time.Local), 7},
+		{"future clamps to 0", time.Date(2026, 10, 4, 9, 0, 0, 0, time.Local), 0},
+	} {
+		if got := AgeDays(tc.t, ref); got != tc.want {
+			t.Errorf("%s: AgeDays = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestInboxOlder(t *testing.T) {
+	ctx := context.Background()
+	svc, err := Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	base := time.Date(2026, 10, 3, 12, 0, 0, 0, time.Local)
+	svc.git = func(context.Context, string) gitctx.Info { return gitctx.Info{} }
+	// ids 1..4 are 10, 8, 2 and 0 days old; id 1 is done.
+	for _, daysAgo := range []int{10, 8, 2, 0} {
+		svc.now = func() time.Time { return base.AddDate(0, 0, -daysAgo) }
+		if _, err := svc.Capture(ctx, CaptureRequest{Text: "jot", Source: "cli"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := svc.Done(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	ids := func(es []Entry) []int64 {
+		var out []int64
+		for _, e := range es {
+			out = append(out, e.ID)
+		}
+		return out
+	}
+	es, err := svc.InboxOlder(ctx, 0, 7, base)
+	if err != nil || len(es) != 1 || es[0].ID != 2 {
+		t.Fatalf("older 7: %v (%v)", ids(es), err)
+	}
+	if es, _ = svc.InboxOlder(ctx, 0, 2, base); len(es) != 2 || es[0].ID != 3 || es[1].ID != 2 {
+		t.Fatalf("older 2 must include exactly 2d: %v", ids(es))
+	}
+	// The limit applies after the age filter, newest first.
+	if es, _ = svc.InboxOlder(ctx, 1, 2, base); len(es) != 1 || es[0].ID != 3 {
+		t.Fatalf("older 2 -n 1: %v", ids(es))
+	}
+	if es, _ = svc.InboxOlder(ctx, 0, 30, base); len(es) != 0 {
+		t.Fatalf("older 30: %v", ids(es))
+	}
+}

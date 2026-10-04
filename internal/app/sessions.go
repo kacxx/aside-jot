@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -77,14 +78,30 @@ func (s *Service) Sessions(ctx context.Context, n int) ([]Session, error) {
 
 // Find returns the sessions with a jot containing q, most recently active
 // first, each with its matching jots, plus the matching jots that have no
-// session. Matching is the same as Search.
+// session. Matching is the same as Search, except that a query shaped like a
+// ticket key (SUP-4821) only matches it as a whole word, so it doesn't find
+// SUP-48210.
 func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error) {
 	if strings.TrimSpace(q) == "" {
 		return nil, nil, errors.New("empty search query")
 	}
+	// A key may have stray spaces around it; any other query is taken as typed.
+	if key := strings.TrimSpace(q); ticketKeyShape.MatchString(key) {
+		q = key
+	}
 	matches, err := s.store.Search(ctx, q, 0)
 	if err != nil {
 		return nil, nil, err
+	}
+	if ticketKeyShape.MatchString(q) {
+		whole := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(q) + `\b`)
+		kept := matches[:0]
+		for _, e := range matches {
+			if whole.MatchString(e.Text) {
+				kept = append(kept, e)
+			}
+		}
+		matches = kept
 	}
 	all, err := s.store.List(ctx, "", 0)
 	if err != nil {
@@ -159,6 +176,11 @@ func transcriptStartDir(path string) string {
 	}
 	return ""
 }
+
+// ticketKeyShape is a query that looks like a ticket key. Which prefixes are
+// really tickets isn't known (there is no allowlist), so UTF-8 is treated the
+// same: it matches as a whole word too.
+var ticketKeyShape = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-[0-9]+$`)
 
 type sessionKey struct{ source, id string }
 
