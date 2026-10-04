@@ -250,11 +250,14 @@ var tools = []map[string]any{
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
 			"branch, and resume_command to reopen it (the user runs it; this tool doesn't). Only chats with " +
-			"a jot in them are found.",
+			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first.",
 		"inputSchema": map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"query": map[string]any{"type": "string", "minLength": 1}},
-			"required":   []string{"query"},
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{"type": "string", "minLength": 1},
+				"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": 20},
+			},
+			"required": []string{"query"},
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
 	},
@@ -306,6 +309,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		var ss []app.Session
 		var loose []app.Entry
 		ss, loose, err = s.svc.Find(ctx, args.Query)
+		ss, loose = ss[:min(len(ss), args.Limit)], loose[:min(len(loose), args.Limit)]
 		sessions := []map[string]any{}
 		for _, x := range ss {
 			latest := x.Latest()

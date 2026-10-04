@@ -336,13 +336,15 @@ func TestFindTool(t *testing.T) {
 		{Text: "SUP-48210 is a different ticket", Source: "codex", SessionID: "s3"},
 		{Text: "SUP-4821 from the terminal", Source: "cli"},
 		{Text: "unrelated", Source: "codex", SessionID: "s2"},
+		{Text: "SUP-99 also from the terminal", Source: "cli"},
 	} {
 		if _, err := svc.Capture(ctx, req); err != nil {
 			t.Fatal(err)
 		}
 	}
 	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find","arguments":{"query":"SUP-4821"}}}` + "\n" +
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{}}}`
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"find","arguments":{"query":"SUP-","limit":1}}}`
 	var out bytes.Buffer
 	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
 		t.Fatal(err)
@@ -376,5 +378,17 @@ func TestFindTool(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], `"isError":true`) {
 		t.Fatalf("an empty query should be a tool error: %s", lines[1])
+	}
+
+	// "SUP-" matches sessions s3 and s1 and two terminal jots; limit keeps the
+	// most recent of each.
+	r.Result.StructuredContent.Sessions, r.Result.StructuredContent.NotInASession = nil, nil
+	if err := json.Unmarshal([]byte(lines[2]), &r); err != nil {
+		t.Fatal(err)
+	}
+	sc = r.Result.StructuredContent
+	if len(sc.Sessions) != 1 || sc.Sessions[0].SessionID != "s3" ||
+		len(sc.NotInASession) != 1 || sc.NotInASession[0].ID != 6 {
+		t.Fatalf("find with limit 1: %s", lines[2])
 	}
 }
