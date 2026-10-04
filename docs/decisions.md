@@ -4,6 +4,26 @@ Why aside is the way it is. Each entry says what was decided, why, and what
 would make it worth revisiting. Add an entry when a choice is likely to be
 questioned again; don't rewrite old ones, add a new entry that replaces them.
 
+## Not in v1, on purpose
+
+**Decided:** v1 leaves these out:
+
+- **Triage**: no priorities, tags, snoozing or workflows beyond `inbox`/`done`.
+- **Promote beyond GitHub**: `aside promote` creates GitHub issues only, on
+  request; no TODOs, Jira tickets or automatic promotion.
+- **Classification**: no automatic categorising or summarising, and no LLM in
+  the loop.
+- **Sync**: local SQLite file only; use `aside backup` to copy it.
+- **UI**: CLI and MCP only.
+- **Cursor**: not supported until Cursor stops sending blocked prompts to the
+  model; see [cursor.md](cursor.md).
+
+**Why:** the MVP proves one thing: capturing is instant, reliable and
+invisible to the model. Everything else can come later.
+
+**Revisit when:** real use shows one of these is missing often enough to be
+worth its weight.
+
 ## One tool for every agent, not one per agent
 
 **Decided:** a single binary with a small adapter per agent
@@ -36,7 +56,7 @@ workaround (edit the blocked message and resend) was verified on Cursor
 **Revisit when:** Cursor ships a fix. The hook replays in
 [SMOKE_TEST.md](SMOKE_TEST.md) only check the hook's JSON and stay green
 while the bug exists, so they can't confirm a fix. Confirm it in Cursor on
-that version, the way the README's edit-and-resend check was done on 3.23.12:
+that version, the way the edit-and-resend check in [cursor.md](cursor.md) was done on 3.23.12:
 in one chat, jot `>> ` with a word that appears nowhere else, send an ordinary
 message, then ask the model to quote every earlier message. Cursor is fixed
 only if the word never reaches the model.
