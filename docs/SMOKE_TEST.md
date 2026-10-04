@@ -41,7 +41,7 @@ jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/claude/capture.json | bin/aside h
 
 ## Cursor hook
 
-Cursor is not supported (see the README); this only checks the hook's replies.
+Cursor is not supported (see [cursor.md](cursor.md)); this only checks the hook's replies.
 
 ```sh
 bin/aside hook cursor < testdata/hooks/cursor/normal.json      # {"continue":true}
@@ -166,5 +166,5 @@ essentially process start-up.
    normal.
 5. `aside inbox` shows the two jots with repo and branch.
 
-Cursor is not supported (see the README), so it has no real-tool step. The
+Cursor is not supported (see [cursor.md](cursor.md)), so it has no real-tool step. The
 `aside hook cursor` replays above still check the hook itself.

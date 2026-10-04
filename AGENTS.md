@@ -1,7 +1,10 @@
 # AGENTS.md
 
-Context for coding agents working on aside. Read this first, then the README
-for user-facing behaviour. Why things are the way they are is in
+Context for coding agents working on aside. Read this first. The README is
+the short user guide; the detail of user-facing behaviour is in
+[docs/reference.md](docs/reference.md) (capture, failure, `find`, `promote`,
+storage), [docs/setup.md](docs/setup.md) (hooks and MCP per agent) and
+[docs/cursor.md](docs/cursor.md). Why things are the way they are is in
 [docs/decisions.md](docs/decisions.md); check it before reopening a settled
 question.
 
@@ -13,7 +16,9 @@ context, and blocks it so the model never sees it. Jots are read back with the
 CLI or a read-only MCP server, and can be promoted to GitHub issues.
 
 Supported: Claude Code and Codex. Cursor is not supported (see below). The
-command was renamed from `jot` to `aside`; the data directory and the `JOT_*`
+command was renamed from `jot` to `aside` because macOS and the BSDs ship
+`/usr/bin/jot`, which shadowed it and made hooks run the wrong program. Don't
+reintroduce a `jot` binary or alias. The data directory and the `JOT_*`
 environment variables kept the old name on purpose.
 
 ## Code map
@@ -54,7 +59,8 @@ CI runs all of these on Linux. On Windows it runs `go vet` and `go test`
 Use a throwaway database (`JOT_DB="$(mktemp -d)/jot.db"`) for any manual
 run; never write test jots to the real one.
 [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) has the manual checks, including
-`find` and `sessions`.
+`find` and `sessions`, and [docs/mvp-validation.md](docs/mvp-validation.md)
+records the results for the initial version.
 
 ## Facts that are easy to get wrong
 
