@@ -434,11 +434,17 @@ aside promote 12 --with-reply --dry-run   # preview the body with the agent's re
   The reply is all the assistant text since your last prompt in the transcript
   the jot recorded (a multi-step turn is many messages with tool calls between;
   tool output is not included), up to when the jot was captured, cut at 8000
-  characters with a note. Transcripts can hold secrets and internal paths, so
-  without `--dry-run` aside shows the full body and asks `[y/N]` before
-  creating anything; `--yes` skips the question. A missing or unreadable
-  transcript, or no reply before the jot, is an error; no issue is created
-  without it. A warning for public repos is not implemented yet.
+  characters with a note. Interrupting the agent, a background task finishing,
+  a local command such as `/model`, a `!` command the agent doesn't answer, or
+  compacting the conversation does not start a new turn, so jotting right
+  after any of them still picks up the reply before it. Transcripts can
+  hold secrets and internal paths, so without `--dry-run` aside shows the full
+  body and asks `[y/N]` before creating anything, and creates exactly the body
+  it showed; `--yes` skips the question. The reply is posted as written, so an
+  `@name` in it notifies that GitHub user and a `#123` links to that issue. A
+  missing or unreadable transcript, or no reply before the jot, is an error; no
+  issue is created without it. A warning for public repos is not implemented
+  yet.
 - On success the jot is marked `done` and the issue URL is stored in its
   metadata as `issue_url`, which `aside show` prints. Promoting the same jot
   again is refused and prints the existing URL.
