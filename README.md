@@ -315,7 +315,9 @@ starting work on this repo."
 
 Tools: `inbox`, `show`, `search`, `find` (the same lookup as `aside find`,
 with the resume command to show you, not run). `inbox`, `search` and `find`
-take a `limit` (default 20, at most 200). There is intentionally **no capture tool**:
+take a `limit` (default 20, at most 200). `find` also returns the totals
+before the cut, and lists each session's 5 newest matching jots with a
+`match_count`. There is intentionally **no capture tool**:
 only you write jots, never the model. `inbox` entries carry `age_days`
 (calendar days since the jot, local time; 0 = today). Likewise there is no promote tool: only
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
