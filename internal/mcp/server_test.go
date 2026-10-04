@@ -285,3 +285,40 @@ func TestShowIssueURL(t *testing.T) {
 		t.Fatalf("show: %s (%v)", text, err)
 	}
 }
+
+func TestInboxAgeDays(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "old idea", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(svc, "test")
+	srv.now = func() time.Time { return time.Now().AddDate(0, 0, 5) }
+
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"inbox","arguments":{}}}`
+	var out bytes.Buffer
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Entries []struct {
+					Text    string `json:"text"`
+					AgeDays *int   `json:"age_days"`
+				} `json:"entries"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	es := r.Result.StructuredContent.Entries
+	if len(es) != 1 || es[0].AgeDays == nil || *es[0].AgeDays != 5 {
+		t.Fatalf("inbox age_days: %s", out.String())
+	}
+}

@@ -119,6 +119,38 @@ func (s *Service) Inbox(ctx context.Context, n int) ([]Entry, error) {
 	return s.store.List(ctx, store.StatusInbox, n)
 }
 
+// InboxOlder returns the newest n inbox entries that are at least days
+// calendar days old at ref (all if n <= 0). The age filter runs before the
+// limit.
+func (s *Service) InboxOlder(ctx context.Context, n, days int, ref time.Time) ([]Entry, error) {
+	es, err := s.store.List(ctx, store.StatusInbox, 0)
+	if err != nil {
+		return nil, err
+	}
+	var out []Entry
+	for _, e := range es {
+		if AgeDays(e.CreatedAt, ref) >= days {
+			out = append(out, e)
+		}
+	}
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out, nil
+}
+
+// AgeDays is how many calendar days before ref t falls, in local time. A jot
+// from 23:50 yesterday is 1 day old, not 0.
+func AgeDays(t, ref time.Time) int {
+	y1, m1, d1 := t.Local().Date()
+	y2, m2, d2 := ref.Local().Date()
+	days := int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	if days < 0 {
+		return 0
+	}
+	return days
+}
+
 // Show returns one entry.
 func (s *Service) Show(ctx context.Context, id int64) (Entry, error) {
 	return s.store.Get(ctx, id)
