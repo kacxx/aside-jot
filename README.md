@@ -163,8 +163,10 @@ codex mcp add aside -- /Users/you/go/bin/aside mcp                 # Codex
 ```
 
 Then ask the agent things like "what's in my inbox?" or "where did I work on
-SUP-4821?". The server is **read-only**: agents can read and search your jots,
-but can't add, change or close them.
+SUP-4821?". The server is **read-only**: through it, agents can read and
+search your jots, but not add, change or close them. An agent that can run
+shell commands can still run `aside` itself, for example `aside done` when you
+ask it to close jots; your agent's command approval is what guards that.
 
 ## All commands
 

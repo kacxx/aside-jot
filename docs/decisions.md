@@ -78,6 +78,30 @@ example, `aside done` taking several ids) over giving the server write access.
 **Revisit if:** there's a write that's safe to do without asking, or a
 confirmation step the agent can't bypass.
 
+What "read-only" guarantees was narrowed by the next entry.
+
+## Read-only covers the MCP server, not the agent
+
+**Decided:** the MCP server stays read-only, but aside doesn't claim more than
+that. An agent with shell access can run `aside` commands, including
+`aside done`, and nothing in aside prevents it. The guard on those is the
+agent's own command approval, not aside.
+
+**Why:** in real use (5 Oct 2026), a Claude Code agent was asked to close
+finished jots, found the MCP tools couldn't, and ran `aside done` from the
+shell instead. That was what the user asked for, but it showed the earlier
+entry's claim, that a read-only server can't be prompt-injected into tidying
+jots, only holds for the server. Saying "agents can't close jots" would
+mislead users about what protects their notes.
+
+**So:** the MCP server keeps offering no writes, so an agent without shell
+access, or one whose shell commands need approval, still can't change jots
+silently. Since closing jots on request is a real workflow, make the CLI path
+easy to find and fast instead of pretending it doesn't exist.
+
+**Revisit if:** jots are changed in ways users didn't ask for. Then consider
+a confirmation step in `aside done` itself.
+
 ## Find and sessions shipped as a thin slice
 
 **Decided:** `aside find` and `aside sessions` (PR #32) group existing jots by
