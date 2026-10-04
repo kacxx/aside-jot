@@ -28,6 +28,13 @@ func TestReplyBeforeTurnBoundaries(t *testing.T) {
 		later     = `{"type":"assistant","timestamp":"2026-09-30T11:00:06Z","message":{"id":"a2","role":"assistant","content":[{"type":"text","text":"Later answer."}]}}`
 		notJot    = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":" >> leading space is a prompt"}}`
 		jot       = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":">> a jot"}}`
+		bash      = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":"<bash-input>git status</bash-input><bash-stdout>clean</bash-stdout><bash-stderr></bash-stderr>"}}`
+		compact   = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>"}}`
+		summary   = `{"type":"user","timestamp":"2026-09-30T11:00:05Z","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context."}}`
+		compacted = `{"type":"user","timestamp":"2026-09-30T11:00:05Z","message":{"role":"user","content":"<local-command-stdout>Compacted</local-command-stdout>"}}`
+		reminded  = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>\nYou are operating in a git worktree.\n</system-reminder>"},{"type":"text","text":"now fix the tests"}]}}`
+		reminder  = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":"<system-reminder>\nThe user started a background task.\n</system-reminder>"}}`
+		image     = `{"type":"user","timestamp":"2026-09-30T11:00:04Z","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}}]}}`
 	)
 	cases := []struct {
 		name    string
@@ -40,6 +47,14 @@ func TestReplyBeforeTurnBoundaries(t *testing.T) {
 		{"answered skill starts a turn", []string{prompt, old, skill, expanded, later}, "Later answer."},
 		{"prompt that only looks like a jot", []string{prompt, old, notJot, later}, "Later answer."},
 		{"jot is not a prompt", []string{prompt, found, jot}, "Found the bug."},
+		{"unanswered ! command", []string{prompt, found, bash}, "Found the bug."},
+		{"answered ! command starts a turn", []string{prompt, old, bash, later}, "Later answer."},
+		{"compaction summary is not a prompt", []string{prompt, found, summary, later}, "Found the bug.\n\nLater answer."},
+		{"jot right after /compact", []string{prompt, found, compact, summary, compacted}, "Found the bug."},
+		{"system reminder before a prompt", []string{prompt, old, reminded, later}, "Later answer."},
+		{"system reminder on its own is mid-turn", []string{prompt, found, reminder, later}, "Found the bug.\n\nLater answer."},
+		{"image-only prompt starts a turn", []string{prompt, old, image, later}, "Later answer."},
+		{"local command output ends the pending command", []string{prompt, found, model, modelOut, notify, later}, "Found the bug.\n\nLater answer."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -67,6 +82,22 @@ func TestTruncateReplyClosesCodeBlock(t *testing.T) {
 	closed := "```\ncode\n```  \n" + strings.Repeat("y", maxReplyRunes)
 	if got := truncateReply(closed); strings.Count(got, "```") != 2 {
 		t.Fatalf("closed block got another fence")
+	}
+}
+
+func TestOpenFence(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"inline code line opens nothing", "```x``` is inline\nmore", ""},
+		{"backtick fence with info string", "```go\ncode", "```"},
+		{"tilde info string may hold backticks", "~~~ `x`\ncode", "~~~"},
+		{"list item fence keeps its indent", "- step\n\n  ```sh\n  run", "  ```"},
+		{"four spaces is an indented code block", "    ```\ncode", ""},
+		{"four-space line does not close", "```\ncode\n    ```\nmore", "```"},
+	}
+	for _, c := range cases {
+		if got := openFence(c.in); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 

@@ -435,8 +435,9 @@ aside promote 12 --with-reply --dry-run   # preview the body with the agent's re
   the jot recorded (a multi-step turn is many messages with tool calls between;
   tool output is not included), up to when the jot was captured, cut at 8000
   characters with a note. Interrupting the agent, a background task finishing,
-  or a local command such as `/model` does not start a new turn, so jotting
-  right after any of them still picks up the reply before it. Transcripts can
+  a local command such as `/model`, a `!` command the agent doesn't answer, or
+  compacting the conversation does not start a new turn, so jotting right
+  after any of them still picks up the reply before it. Transcripts can
   hold secrets and internal paths, so without `--dry-run` aside shows the full
   body and asks `[y/N]` before creating anything, and creates exactly the body
   it showed; `--yes` skips the question. The reply is posted as written, so an
