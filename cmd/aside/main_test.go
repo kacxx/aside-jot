@@ -269,3 +269,50 @@ func TestPromoteCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestPromoteWithReplyCLI(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	f := &ghFake{}
+	old := promoteRunner
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner = old })
+
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	rec := `{"type":"user","timestamp":"2020-01-01T00:00:00Z","message":{"role":"user","content":"hi"}}
+{"type":"assistant","timestamp":"2020-01-01T00:00:01Z","message":{"id":"m","role":"assistant","content":[{"type":"text","text":"the diagnosis"}]}}
+`
+	if err := os.WriteFile(transcript, []byte(rec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "note", Source: "claude",
+		Metadata: map[string]any{"transcript_path": transcript}}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Close()
+
+	aside := func(stdin string, args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(stdin), &out)
+		return out.String(), err
+	}
+	// Declined (or no answer): the preview is shown and nothing is created.
+	for _, answer := range []string{"", "n\n"} {
+		out, err := aside(answer, "promote", "1", "--repo", "o/n", "--with-reply")
+		if err == nil || !strings.Contains(out, "the diagnosis") || !strings.Contains(out, "[y/N]") {
+			t.Fatalf("declined %q: %q, %v", answer, out, err)
+		}
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("declined promote ran %v", f.calls)
+	}
+	// Confirmed.
+	if out, err := aside("y\n", "promote", "1", "--repo", "o/n", "--with-reply"); err != nil ||
+		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") {
+		t.Fatalf("confirmed: %q, %v", out, err)
+	}
+}
