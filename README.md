@@ -313,8 +313,10 @@ To have Codex check your notes on its own, add a line to your `AGENTS.md`,
 for example: "My side notes are in the `aside` MCP server; check `inbox` when
 starting work on this repo."
 
-Tools: `inbox`, `show`, `search`. There is intentionally **no capture tool**:
-only you write jots, never the model. Likewise there is no promote tool: only
+Tools: `inbox`, `show`, `search`, `find` (the same lookup as `aside find`,
+with the resume command to show you, not run). There is intentionally **no capture tool**:
+only you write jots, never the model. `inbox` entries carry `age_days`
+(calendar days since the jot, local time; 0 = today). Likewise there is no promote tool: only
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
 
 ## Capture rules
@@ -351,7 +353,8 @@ space or a backslash.
 
 ```
 aside add <text...>        capture from the terminal (reads stdin if no text)
-aside inbox [-n N]         newest inbox jots (default 20, 0 = all)
+aside inbox [-n N] [--older D]  newest inbox jots with their age in days (default 20,
+                           0 = all); --older keeps jots at least D days old
 aside show <id>            one jot with its context
 aside search <query...>    substring search over all jots
 aside find <query...>      sessions with a matching jot, and how to resume them
@@ -392,6 +395,11 @@ SUP-4821 token TTL investigation
   gone). Codex resumes from any directory, so its sessions get
   `codex resume <id>` with no `cd`. Cursor isn't supported, so its sessions
   have no resume command.
+- **Ticket keys match whole words.** A query shaped like a ticket key, such as
+  `SUP-4821`, only matches that key as a word, so it doesn't list `SUP-48210`
+  or `XSUP-4821`. Anything else is a substring search, as in `aside search`.
+  There is no list of ticket prefixes to configure and no tag table: the
+  filter runs on the matching jots at query time.
 - Done jots are listed with `(done)`, as in `aside search`.
 - **Only chats with a jot in them are listed.** A chat where you never jotted
   doesn't appear. Starting a ticket's chat with a `session:` jot makes it
@@ -490,3 +498,5 @@ golangci-lint run   # v2.14.0, config in .golangci.yml
 See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against
 the built binary, and [docs/mvp-validation.md](docs/mvp-validation.md) for the
 recorded results (tests, end-to-end run and hook latency) of the initial version.
+[AGENTS.md](AGENTS.md) is the starting point for coding agents, and
+[docs/decisions.md](docs/decisions.md) records why aside works the way it does.

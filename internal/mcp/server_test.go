@@ -96,8 +96,8 @@ func TestSession(t *testing.T) {
 	for _, tl := range list.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "inbox,show,search" {
-		t.Errorf("tools = %v; must be read-only inbox, show, search", names)
+	if strings.Join(names, ",") != "inbox,show,search,find" {
+		t.Errorf("tools = %v; must be read-only inbox, show, search, find", names)
 	}
 
 	type toolResult struct {
@@ -283,5 +283,98 @@ func TestShowIssueURL(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(text), &e); err != nil || e.IssueURL != "https://github.com/o/n/issues/3" || e.Status != "done" {
 		t.Fatalf("show: %s (%v)", text, err)
+	}
+}
+
+func TestInboxAgeDays(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "old idea", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(svc, "test")
+	srv.now = func() time.Time { return time.Now().AddDate(0, 0, 5) }
+
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"inbox","arguments":{}}}`
+	var out bytes.Buffer
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Entries []struct {
+					Text    string `json:"text"`
+					AgeDays *int   `json:"age_days"`
+				} `json:"entries"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	es := r.Result.StructuredContent.Entries
+	if len(es) != 1 || es[0].AgeDays == nil || *es[0].AgeDays != 5 {
+		t.Fatalf("inbox age_days: %s", out.String())
+	}
+}
+
+func TestFindTool(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	for _, req := range []app.CaptureRequest{
+		{Text: "session: SUP-4821 token TTL", Source: "codex", SessionID: "s1", Cwd: "/work"},
+		{Text: "SUP-4821 needs a ticket", Source: "codex", SessionID: "s1", Cwd: "/work"},
+		{Text: "SUP-48210 is a different ticket", Source: "codex", SessionID: "s3"},
+		{Text: "SUP-4821 from the terminal", Source: "cli"},
+		{Text: "unrelated", Source: "codex", SessionID: "s2"},
+	} {
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find","arguments":{"query":"SUP-4821"}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"find","arguments":{}}}`
+	var out bytes.Buffer
+	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Sessions []struct {
+					Source        string      `json:"source"`
+					SessionID     string      `json:"session_id"`
+					Label         string      `json:"label"`
+					ResumeCommand string      `json:"resume_command"`
+					Matches       []app.Entry `json:"matches"`
+				} `json:"sessions"`
+				NotInASession []app.Entry `json:"not_in_a_session"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &r); err != nil {
+		t.Fatal(err)
+	}
+	sc := r.Result.StructuredContent
+	if len(sc.Sessions) != 1 || len(sc.NotInASession) != 1 {
+		t.Fatalf("find: %s", lines[0])
+	}
+	s := sc.Sessions[0]
+	if s.Source != "codex" || s.SessionID != "s1" || s.Label != "SUP-4821 token TTL" ||
+		s.ResumeCommand != "codex resume s1" || len(s.Matches) != 2 {
+		t.Fatalf("session: %+v", s)
+	}
+	if !strings.Contains(lines[1], `"isError":true`) {
+		t.Fatalf("an empty query should be a tool error: %s", lines[1])
 	}
 }

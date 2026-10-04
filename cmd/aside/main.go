@@ -35,7 +35,8 @@ const usage = `aside — a side channel for thoughts while working with coding a
 
 Usage:
   aside add <text...>        capture a jot from the terminal (reads stdin if no text)
-  aside inbox [-n N]         list the newest inbox jots (default 20, 0 = all)
+  aside inbox [-n N] [--older D]  list the newest inbox jots (default 20, 0 = all),
+                             optionally only those at least D days old
   aside show <id>            show one jot with its context
   aside search <query...>    search all jots (substring, case-insensitive)
   aside find <query...>      sessions with a jot matching the query, and how to resume them
@@ -145,17 +146,31 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	case "inbox":
 		fs := flag.NewFlagSet("inbox", flag.ContinueOnError)
 		n := fs.Int("n", 20, "number of jots to show (0 = all)")
+		older := fs.Int("older", 0, "only jots at least N days old")
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
-		es, err := svc.Inbox(ctx, *n)
+		if *older < 0 {
+			return errors.New("--older must be 0 or more")
+		}
+		var es []app.Entry
+		var err error
+		if *older > 0 {
+			es, err = svc.InboxOlder(ctx, *n, *older, now())
+		} else {
+			es, err = svc.Inbox(ctx, *n)
+		}
 		if err != nil {
 			return err
 		}
 		if len(es) == 0 {
-			fmt.Fprintln(stdout, "Inbox is empty.")
+			if *older > 0 {
+				fmt.Fprintf(stdout, "No inbox jots are %d or more days old.\n", *older)
+			} else {
+				fmt.Fprintln(stdout, "Inbox is empty.")
+			}
 		}
-		printList(stdout, es)
+		printInbox(stdout, es)
 	case "show":
 		id, err := parseID(args)
 		if err != nil {
@@ -387,6 +402,18 @@ func printList(w io.Writer, es []app.Entry) {
 	}
 }
 
+// printInbox lists jots with their age in days instead of a timestamp.
+func printInbox(w io.Writer, es []app.Entry) {
+	for _, e := range es {
+		line := firstLine(e.Text, 80)
+		where := location(e)
+		if where != "" {
+			where = "  [" + where + "]"
+		}
+		fmt.Fprintf(w, "#%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), line, where)
+	}
+}
+
 // printSession prints a session's label, a summary line, the given jots, and
 // the command to resume it.
 func printSession(w io.Writer, s app.Session, jots []app.Entry) {
@@ -428,10 +455,8 @@ var now = time.Now
 
 // age is how many calendar days ago t was in local time: "today", "1d", "12d".
 func age(t, ref time.Time) string {
-	y1, m1, d1 := t.Local().Date()
-	y2, m2, d2 := ref.Local().Date()
-	days := int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
-	if days <= 0 {
+	days := app.AgeDays(t, ref)
+	if days == 0 {
 		return "today"
 	}
 	return strconv.Itoa(days) + "d"

@@ -104,6 +104,36 @@ func TestFind(t *testing.T) {
 	}
 }
 
+func TestFindTicketKeyMatchesWholeWord(t *testing.T) {
+	ctx := context.Background()
+	svc := sessionService(t)
+	jot(t, svc, "claude", "s1", "/w", "SUP-4821 token TTL")          // #1
+	jot(t, svc, "claude", "s2", "/w", "SUP-48210 is another ticket") // #2
+	jot(t, svc, "claude", "s3", "/w", "XSUP-4821 and SUP-4821X")     // #3
+	jot(t, svc, "claude", "s4", "/w", "(sup-4821), see PAY-1")       // #4
+	jot(t, svc, "cli", "", "", "SUP-4821 from the terminal")         // #5
+	jot(t, svc, "claude", "s5", "/w", "UTF-8 handling")              // #6
+	jot(t, svc, "claude", "s6", "/w", "the UTF-80 variant")          // #7
+
+	ss, loose, err := svc.Find(ctx, " sup-4821 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 2 || ss[0].ID != "s4" || ss[1].ID != "s1" || len(loose) != 1 || loose[0].ID != 5 {
+		t.Fatalf("whole word: %+v / %+v", ss, loose)
+	}
+	if ss, _, _ := svc.Find(ctx, "UTF-8"); len(ss) != 1 || ss[0].ID != "s5" {
+		t.Fatalf("any key-shaped query is whole word: %+v", ss)
+	}
+	// Not key-shaped: a plain substring search, as before.
+	if ss, _, _ := svc.Find(ctx, "SUP-"); len(ss) != 4 {
+		t.Fatalf("substring: %d sessions", len(ss))
+	}
+	if ss, _, _ := svc.Find(ctx, "sup-4821 token"); len(ss) != 1 {
+		t.Fatalf("a phrase is a substring: %+v", ss)
+	}
+}
+
 func TestSessionsResumeFromStartDir(t *testing.T) {
 	svc := sessionService(t)
 	ctx := context.Background()
