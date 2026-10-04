@@ -43,7 +43,7 @@ only if the word never reaches the model.
 
 ## The MCP server is read-only
 
-**Decided:** the MCP server offers `inbox`, `show` and `search` only. Agents
+**Decided:** the MCP server offers `inbox`, `show`, `search` and `find` only. Agents
 can't create, edit, close or delete jots.
 
 **Why:** jots are the user's notes. An agent that tidies them silently can
@@ -97,3 +97,26 @@ reuses the user's existing `gh` authentication instead of storing tokens.
 Including the agent's reply in the issue
 ([#33](https://github.com/kacxx/aside-jot/issues/33)) is opt-in for the same
 reason: transcripts can contain secrets and the target repo may be public.
+
+## Ticket keys are matched at query time, not tagged
+
+**Decided:** `aside find SUP-4821` runs the substring search, then keeps the
+jots where the key appears as a whole word. There is no `jot_tags` table, no
+prefix allowlist and no backfill. The MCP server gets a read-only `find` with
+the same lookup.
+
+**Why:** the problem to solve was `SUP-4821` also finding `SUP-48210`. Tags
+written at capture time depend on the environment of whichever process captured
+the jot (hooks in GUI editors run with a minimal one), so a jot captured
+without the allowlist would be untagged and `find` would silently miss it,
+which substring search never did. A query-time filter has nothing to drift out
+of sync, needs no migration, and the data is small enough that an index buys
+nothing noticeable. A plain `[A-Z]+-\d+` pattern would also match `UTF-8`, which
+only matters when picking keys out of text; a user asking for `UTF-8` gets
+whole-word matches of it.
+
+**Revisit if:** `find` needs to answer questions the text can't, such as "all
+ticket keys in this session" or listing tickets by count. Then add `jot_tags`
+with the allowlist in a config file next to the database, so every process
+sees the same one.
+

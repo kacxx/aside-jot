@@ -1,7 +1,7 @@
 // Package mcp is a minimal Model Context Protocol server over stdio.
 //
 // Messages are newline-delimited JSON-RPC 2.0. The server exposes read-only
-// tools (inbox, show, search). There is deliberately no capture tool: jots are
+// tools (inbox, show, search, find). There is deliberately no capture tool: jots are
 // written by the user, never by the model.
 package mcp
 
@@ -45,6 +45,7 @@ type Reader interface {
 	Inbox(ctx context.Context, n int) ([]app.Entry, error)
 	Show(ctx context.Context, id int64) (app.Entry, error)
 	Search(ctx context.Context, q string, n int) ([]app.Entry, error)
+	Find(ctx context.Context, q string) ([]app.Session, []app.Entry, error)
 }
 
 // Server serves MCP requests against a Reader.
@@ -243,6 +244,20 @@ var tools = []map[string]any{
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
 	},
+	{
+		"name": "find",
+		"description": "Find the agent sessions (Claude Code, Codex) where the user jotted about something, " +
+			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
+			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
+			"branch, and resume_command to reopen it (the user runs it; this tool doesn't). Only chats with " +
+			"a jot in them are found.",
+		"inputSchema": map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"query": map[string]any{"type": "string", "minLength": 1}},
+			"required":   []string{"query"},
+		},
+		"annotations": map[string]any{"readOnlyHint": true},
+	},
 }
 
 func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage) (any, *rpcError) {
@@ -287,6 +302,26 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		var es []app.Entry
 		es, err = s.svc.Search(ctx, args.Query, args.Limit)
 		v = map[string]any{"entries": nonNil(es)}
+	case "find":
+		var ss []app.Session
+		var loose []app.Entry
+		ss, loose, err = s.svc.Find(ctx, args.Query)
+		sessions := []map[string]any{}
+		for _, x := range ss {
+			latest := x.Latest()
+			sessions = append(sessions, map[string]any{
+				"source":         x.Source,
+				"session_id":     x.ID,
+				"label":          x.LabelText(),
+				"repo":           latest.RepoName,
+				"branch":         latest.Branch,
+				"cwd":            x.Cwd,
+				"last_active":    latest.CreatedAt,
+				"matches":        nonNil(x.Matches),
+				"resume_command": x.ResumeCommand(),
+			})
+		}
+		v = map[string]any{"sessions": sessions, "not_in_a_session": nonNil(loose)}
 	default:
 		return nil, &rpcError{Code: codeInvalidParams, Message: "unknown tool: " + name}
 	}
