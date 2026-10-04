@@ -360,7 +360,7 @@ aside search <query...>    substring search over all jots
 aside find <query...>      sessions with a matching jot, and how to resume them
 aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
 aside done <id>            mark done (drops out of the inbox)
-aside promote <id> [--repo owner/name] [--dry-run]
+aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run]
                            turn a jot into a GitHub issue (see Promote)
 aside backup <path>        consistent copy via VACUUM INTO; never overwrites
 aside paths                where the data and binary live; warns about PATH
@@ -416,6 +416,7 @@ GitHub issue, as a deliberate step after capture:
 aside promote 12 --dry-run   # print the target repo, title and body; creates nothing
 aside promote 12             # create the issue and print its URL
 aside promote 12 --repo kacxx/aside-jot
+aside promote 12 --with-reply --dry-run   # preview the body with the agent's reply
 ```
 
 - The issue is created with the [GitHub CLI](https://cli.github.com)
@@ -428,6 +429,16 @@ aside promote 12 --repo kacxx/aside-jot
 - **Title:** the jot's first line. **Body:** the full jot, then a line such as
   `Captured 2026-09-30T14:02:11+02:00 from claude on aside-jot@main (abc1234)`,
   leaving out anything unknown.
+- **`--with-reply`** (opt-in, Claude Code jots only) adds the agent's reply
+  under an `## Agent reply` heading, between the jot and the `Captured` line.
+  The reply is all the assistant text since your last prompt in the transcript
+  the jot recorded (a multi-step turn is many messages with tool calls between;
+  tool output is not included), up to when the jot was captured, cut at 8000
+  characters with a note. Transcripts can hold secrets and internal paths, so
+  without `--dry-run` aside shows the full body and asks `[y/N]` before
+  creating anything; `--yes` skips the question. A missing or unreadable
+  transcript, or no reply before the jot, is an error; no issue is created
+  without it. A warning for public repos is not implemented yet.
 - On success the jot is marked `done` and the issue URL is stored in its
   metadata as `issue_url`, which `aside show` prints. Promoting the same jot
   again is refused and prints the existing URL.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -286,5 +287,105 @@ func TestPromoteFailuresLeaveJotUnchanged(t *testing.T) {
 	svc := promoteService(t, repoInfo)
 	if _, err := svc.Promote(ctx, &fakeRunner{}, PromoteRequest{ID: 99}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown id: %v", err)
+	}
+}
+
+// replyTranscript mimics a real Claude Code transcript: every content block is
+// its own record, a message is split across records sharing a message id, tool
+// results come back as user records, and a sidechain and a record from after the jot
+// (captured at 12:00:00Z) sit among the turn it belongs to.
+const replyTranscript = `{"type":"user","timestamp":"2026-09-30T11:00:00Z","message":{"role":"user","content":"look at sessions"}}
+{"type":"assistant","timestamp":"2026-09-30T11:00:05Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"early reply"}]}}
+{"type":"user","timestamp":"2026-09-30T11:58:00Z","message":{"role":"user","content":[{"type":"text","text":"why is resume cd wrong?"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:58:05Z","message":{"id":"m2","role":"assistant","content":[{"type":"text","text":"Let me check."}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:58:06Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash"}]}}
+{"type":"user","timestamp":"2026-09-30T11:58:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:00Z","message":{"id":"m3","role":"assistant","content":[{"type":"text","text":"Found it: resume cds into the wrong folder."}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:01Z","message":{"id":"m3","role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read"}]}}
+{"type":"user","timestamp":"2026-09-30T11:59:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:30Z","isSidechain":true,"message":{"id":"s1","role":"assistant","content":[{"type":"text","text":"subagent chatter"}]}}
+{"type":"assistant","timestamp":"2026-09-30T12:05:00Z","message":{"id":"m5","role":"assistant","content":[{"type":"text","text":"later reply"}]}}
+{"type":"assistant","timestamp":"2026-09-30T11:59:40Z","message":{"id":"m4","role":"assistant","content":[{"type":"text","text":"Evidence: cwd moved."}]}}
+`
+
+func TestPromoteWithReply(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	svc := promoteService(t, repoInfo)
+	if _, err := svc.Capture(ctx, CaptureRequest{Text: "resume uses wrong folder", Source: "claude",
+		Metadata: map[string]any{"transcript_path": path}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(replyTranscript), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeRunner{remote: "git@github.com:kacxx/aside-jot.git"}
+
+	p, err := svc.Promote(ctx, f, PromoteRequest{ID: 2, DryRun: true, WithReply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "resume uses wrong folder\n\n## Agent reply\n\nLet me check.\n\nFound it: resume cds into the wrong folder.\n\nEvidence: cwd moved.\n\nCaptured "
+	if !strings.HasPrefix(p.Body, want) {
+		t.Fatalf("body:\n%s", p.Body)
+	}
+	for _, bad := range []string{"early reply", "later reply", "subagent", "tool_use"} {
+		if strings.Contains(p.Body, bad) {
+			t.Errorf("body has %q", bad)
+		}
+	}
+
+	// Without the flag the body is unchanged.
+	p, err = svc.Promote(ctx, f, PromoteRequest{ID: 2, DryRun: true})
+	if err != nil || strings.Contains(p.Body, "Agent reply") {
+		t.Fatalf("no flag: %q, %v", p.Body, err)
+	}
+}
+
+func TestPromoteWithReplyErrors(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty.jsonl")
+	if err := os.WriteFile(empty, []byte(`{"type":"user","timestamp":"2026-09-30T11:00:00Z"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name, source string
+		meta         map[string]any
+		want         string
+	}{
+		{"no transcript path", "claude", nil, "no transcript path"},
+		{"missing file", "claude", map[string]any{"transcript_path": filepath.Join(dir, "gone.jsonl")}, "cannot read transcript"},
+		{"no reply", "claude", map[string]any{"transcript_path": empty}, "no agent reply found"},
+		{"codex", "codex", map[string]any{"transcript_path": empty}, "Claude Code jots only"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc := promoteService(t, repoInfo)
+			if _, err := svc.Capture(ctx, CaptureRequest{Text: "x", Source: c.source, Metadata: c.meta}); err != nil {
+				t.Fatal(err)
+			}
+			f := &fakeRunner{remote: "https://github.com/o/n.git", url: "https://github.com/o/n/issues/1"}
+			_, err := svc.Promote(ctx, f, PromoteRequest{ID: 2, WithReply: true})
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("err = %v, want %q", err, c.want)
+			}
+			for _, call := range f.calls {
+				if strings.HasPrefix(call, "gh issue") {
+					t.Errorf("created an issue: %q", call)
+				}
+			}
+		})
+	}
+}
+
+func TestTruncateReply(t *testing.T) {
+	long := strings.Repeat("é", maxReplyRunes+10)
+	got := truncateReply(long)
+	if !strings.Contains(got, "reply cut") || !strings.HasPrefix(got, strings.Repeat("é", maxReplyRunes)) {
+		t.Fatalf("truncate: %.60q", got)
+	}
+	if truncateReply("short") != "short" {
+		t.Fatal("short reply changed")
 	}
 }

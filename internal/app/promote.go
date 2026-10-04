@@ -46,6 +46,8 @@ type PromoteRequest struct {
 	ID     int64
 	Repo   string // [HOST/]OWNER/NAME; empty means the jot's origin remote
 	DryRun bool
+	// WithReply adds the agent's last reply before the jot to the body.
+	WithReply bool
 }
 
 // Promotion describes the issue a jot became, or would become on a dry run.
@@ -77,7 +79,13 @@ func (s *Service) Promote(ctx context.Context, r Runner, req PromoteRequest) (Pr
 	if e.IssueURL != "" {
 		return Promotion{}, &AlreadyPromotedError{ID: e.ID, URL: e.IssueURL}
 	}
-	p := Promotion{Title: IssueTitle(e), Body: IssueBody(e)}
+	reply := ""
+	if req.WithReply {
+		if reply, err = agentReply(e); err != nil {
+			return Promotion{}, err
+		}
+	}
+	p := Promotion{Title: IssueTitle(e), Body: issueBody(e, reply)}
 
 	if req.Repo != "" {
 		if !validRepo(req.Repo) {
@@ -158,9 +166,17 @@ func IssueTitle(e Entry) string {
 
 // IssueBody is the jot's full text, then where and when it was captured,
 // leaving out whatever is unknown.
-func IssueBody(e Entry) string {
+func IssueBody(e Entry) string { return issueBody(e, "") }
+
+// issueBody is IssueBody with, if reply is not empty, the agent's reply under
+// its own heading between the jot and the footer.
+func issueBody(e Entry, reply string) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(e.Text))
+	if reply != "" {
+		b.WriteString("\n\n## Agent reply\n\n")
+		b.WriteString(reply)
+	}
 	b.WriteString("\n\nCaptured ")
 	b.WriteString(e.CreatedAt.Local().Format(time.RFC3339))
 	if e.Source != "" {

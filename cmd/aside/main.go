@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -41,7 +42,7 @@ Usage:
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
   aside done <id>            mark a jot as done
-  aside promote <id> [--repo owner/name] [--dry-run]
+  aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
@@ -246,7 +247,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "✓ #%d done\n", id)
 	case "promote":
-		return cmdPromote(ctx, svc, args, stdout)
+		return cmdPromote(ctx, svc, args, stdin, stdout)
 	case "backup":
 		if len(args) != 1 {
 			return errors.New("usage: aside backup <path>")
@@ -268,16 +269,18 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	return nil
 }
 
-func cmdPromote(ctx context.Context, svc *app.Service, args []string, w io.Writer) error {
+func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.Reader, w io.Writer) error {
 	fs := flag.NewFlagSet("promote", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	repo := fs.String("repo", "", "target repository, owner/name")
 	dryRun := fs.Bool("dry-run", false, "print the issue without creating it")
+	withReply := fs.Bool("with-reply", false, "include the agent's last reply before the jot (Claude Code only)")
+	yes := fs.Bool("yes", false, "with --with-reply, create the issue without asking first")
 	// Flags may come before or after the id.
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
-			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run])", err)
 		}
 		if fs.NArg() == 0 {
 			break
@@ -287,9 +290,28 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, w io.Write
 	}
 	id, err := parseID(pos)
 	if err != nil {
-		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--dry-run])", err)
+		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run])", err)
 	}
-	p, err := svc.Promote(ctx, promoteRunner, app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun})
+	req := app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun, WithReply: *withReply}
+	if *withReply && !*dryRun && !*yes {
+		// The reply comes from a transcript that may hold secrets, so show
+		// exactly what would be posted and ask first.
+		preview := req
+		preview.DryRun = true
+		p, err := svc.Promote(ctx, promoteRunner, preview)
+		if errors.Is(err, app.ErrNotFound) {
+			return fmt.Errorf("no jot #%d", id)
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
+		answer, _ := bufio.NewReader(stdin).ReadString('\n')
+		if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
+			return errors.New("not created (pass --yes to skip this question)")
+		}
+	}
+	p, err := svc.Promote(ctx, promoteRunner, req)
 	if errors.Is(err, app.ErrNotFound) {
 		return fmt.Errorf("no jot #%d", id)
 	}
