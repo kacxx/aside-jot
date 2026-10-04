@@ -43,13 +43,18 @@ go vet ./...
 go test -race ./...
 golangci-lint run          # v2.14.0, config in .golangci.yml
 bash test/e2e/run.sh       # end-to-end, throwaway database
-go install ./cmd/aside     # installs to ~/go/bin/aside
 ```
 
-CI runs all of these on Linux, plus `go test` on Windows. Use a throwaway
-database (`JOT_DB="$(mktemp -d)/jot.db"`) for any manual run; never write test
-jots to the real one. [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) has the manual
-checks, including `find` and `sessions`.
+CI runs all of these on Linux. On Windows it runs `go vet` and `go test`
+(without `-race`, which needs cgo).
+
+`go install ./cmd/aside` installs to `$(go env GOPATH)/bin`, which is
+`~/go/bin` unless `GOPATH` is set.
+
+Use a throwaway database (`JOT_DB="$(mktemp -d)/jot.db"`) for any manual
+run; never write test jots to the real one.
+[docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) has the manual checks, including
+`find` and `sessions`.
 
 ## Facts that are easy to get wrong
 
