@@ -33,8 +33,13 @@ only decides whether a prompt is sent now, so aside can't work around it, and
 workaround (edit the blocked message and resend) was verified on Cursor
 3.23.12, but it's manual and easy to forget.
 
-**Revisit when:** Cursor ships a fix. Re-run the Cursor checks in the README
-and [SMOKE_TEST.md](SMOKE_TEST.md) on that version before claiming support.
+**Revisit when:** Cursor ships a fix. The hook replays in
+[SMOKE_TEST.md](SMOKE_TEST.md) only check the hook's JSON and stay green
+while the bug exists, so they can't confirm a fix. Confirm it in Cursor on
+that version, the way the README's edit-and-resend check was done on 3.23.12:
+in one chat, jot `>> ` with a word that appears nowhere else, send an ordinary
+message, then ask the model to quote every earlier message. Cursor is fixed
+only if the word never reaches the model.
 
 ## The MCP server is read-only
 
