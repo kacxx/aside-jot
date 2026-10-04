@@ -30,7 +30,7 @@ environment variables kept the old name on purpose.
 - `internal/store/` — SQLite (pure Go, no cgo), one `entries` table, owner-only
   file permissions.
 - `internal/gitctx/` — best-effort git context with a time budget.
-- `internal/mcp/` — the read-only MCP server (`inbox`, `show`, `search`).
+- `internal/mcp/` — the read-only MCP server (`inbox`, `show`, `search`, `find`).
 - `testdata/hooks/<agent>/` — recorded hook payloads used by tests and the
   smoke test.
 - `test/e2e/run.sh` — black-box install and hook flow, run in CI.
