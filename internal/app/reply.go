@@ -41,11 +41,14 @@ func replyBefore(path string, t time.Time) (string, error) {
 			Timestamp   string `json:"timestamp"`
 			IsSidechain bool   `json:"isSidechain"`
 			IsMeta      bool   `json:"isMeta"`
-			Message     struct {
+			// A compaction summary replaces earlier context but is not a
+			// prompt; the reply before it is still the reply.
+			IsCompactSummary bool `json:"isCompactSummary"`
+			Message          struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
 		}
-		if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain && !rec.IsMeta {
+		if json.Unmarshal(line, &rec) == nil && !rec.IsSidechain && !rec.IsMeta && !rec.IsCompactSummary {
 			ts, perr := time.Parse(time.RFC3339Nano, rec.Timestamp)
 			if perr == nil && !ts.After(t) {
 				switch rec.Type {
@@ -57,11 +60,15 @@ func replyBefore(path string, t time.Time) (string, error) {
 						parts = append(parts, text)
 					}
 				case "user":
-					switch userRecordKind(contentText(rec.Message.Content, "text")) {
+					switch userRecordKind(rec.Message.Content) {
 					case userPrompt:
 						parts, commandPending = nil, false
 					case userCommand:
 						commandPending = true
+					case userLocalOutput:
+						// The command was answered locally, so a later
+						// reply (say, to a task notification) isn't its.
+						commandPending = false
 					}
 				}
 			}
@@ -82,44 +89,104 @@ func replyBefore(path string, t time.Time) (string, error) {
 type userKind int
 
 const (
-	userOther   userKind = iota // not typed by the user as a request
-	userPrompt                  // a prompt; starts a new turn
-	userCommand                 // a slash command; may or may not get a reply
+	userOther       userKind = iota // not typed by the user as a request
+	userPrompt                      // a prompt; starts a new turn
+	userCommand                     // a slash or ! command; may or may not get a reply
+	userLocalOutput                 // a local command's output; never answered
 )
 
 // notPrompts are the starts of user records that Claude Code writes itself.
-// None starts a turn: an interrupt leaves the interrupted turn as the reply,
-// a background task's notification arrives in the middle of one, and a local
-// command's output is not something the agent answers.
+// Neither starts a turn: an interrupt leaves the interrupted turn as the
+// reply, and a background task's notification arrives in the middle of one.
 var notPrompts = []string{
 	"[Request interrupted by user",
 	"<task-notification>",
+}
+
+// localOutputs start the output of a local slash command such as /model.
+var localOutputs = []string{
 	"<local-command-stdout>",
 	"<local-command-stderr>",
 }
 
-// userRecordKind classifies the text of a user record. Tool results have no
-// text and jots never reach the model, so neither is a prompt. A slash
-// command is recorded the same way whether it is local, like /model, or
-// expands to a prompt the agent answers, like a skill, so the caller decides
-// from what follows.
-func userRecordKind(text string) userKind {
+// commands start a command the agent may or may not answer. A slash command
+// is recorded the same way whether it is local, like /model, or expands to a
+// prompt the agent answers, like a skill; a ! command (bash mode) is
+// sometimes answered too. So the caller decides from what follows.
+var commands = []string{
+	"<command-name>",
+	"<command-message>",
+	"<bash-input>",
+}
+
+// userRecordKind classifies a user record's content. Tool results have no
+// text and jots never reach the model, so neither is a prompt. A prompt that
+// is only an image has no text but is still a prompt. Claude Code puts
+// <system-reminder> blocks in front of the prompt they arrived with, so they
+// are ignored and what follows them is classified.
+func userRecordKind(content json.RawMessage) userKind {
+	text := stripSystemReminders(contentText(content, "text"))
 	if strings.TrimSpace(text) == "" {
+		if hasBlock(content, "image") {
+			return userPrompt
+		}
 		return userOther
 	}
 	if _, ok := capture.Match(text); ok {
 		return userOther
 	}
 	t := strings.TrimSpace(text)
-	for _, p := range notPrompts {
-		if strings.HasPrefix(t, p) {
-			return userOther
-		}
-	}
-	if strings.HasPrefix(t, "<command-name>") || strings.HasPrefix(t, "<command-message>") {
+	switch {
+	case hasAnyPrefix(t, notPrompts):
+		return userOther
+	case hasAnyPrefix(t, localOutputs):
+		return userLocalOutput
+	case hasAnyPrefix(t, commands):
 		return userCommand
 	}
 	return userPrompt
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// stripSystemReminders removes the <system-reminder> blocks that start text,
+// and the newlines after them, leaving the rest untrimmed.
+func stripSystemReminders(text string) string {
+	const open, end = "<system-reminder>", "</system-reminder>"
+	for {
+		t := strings.TrimLeft(text, " \t\n")
+		if !strings.HasPrefix(t, open) {
+			return text
+		}
+		_, rest, ok := strings.Cut(t, end)
+		if !ok {
+			return ""
+		}
+		text = strings.TrimLeft(rest, "\n")
+	}
+}
+
+// hasBlock reports whether a message's content has a block of the given type.
+func hasBlock(raw json.RawMessage, kind string) bool {
+	var blocks []struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return false
+	}
+	for _, b := range blocks {
+		if b.Type == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // contentText joins the non-blank blocks of the given type in a message's
@@ -162,12 +229,21 @@ func truncateReply(s string) string {
 	return cut + fmt.Sprintf("\n\n_[reply cut: showing the first %d of %d characters]_", maxReplyRunes, len(rs))
 }
 
-// openFence returns the fence (such as "```") of a fenced code block that s
-// opens and does not close, or "" if there is none.
+// openFence returns the line that closes a fenced code block s opens and does
+// not close (such as "```", indented like its opening line), or "" if there
+// is none. Fences are recognised as in CommonMark: indented at most three
+// spaces, and a backtick fence's info string has no backticks, so a line of
+// inline code such as "```x```" opens nothing. A fence inside a block quote
+// is not tracked: the blank line before the cut note ends the quote, which
+// closes the block anyway.
 func openFence(s string) string {
-	open := ""
+	indent, open := "", ""
 	for _, line := range strings.Split(s, "\n") {
 		l := strings.TrimLeft(line, " ")
+		lead := line[:len(line)-len(l)]
+		if len(lead) > 3 {
+			continue
+		}
 		if open != "" {
 			if strings.HasPrefix(l, open) && strings.Trim(strings.TrimRight(l, " \t"), open[:1]) == "" {
 				open = ""
@@ -175,13 +251,21 @@ func openFence(s string) string {
 			continue
 		}
 		for _, c := range []string{"`", "~"} {
-			if strings.HasPrefix(l, c+c+c) {
-				open = l[:len(l)-len(strings.TrimLeft(l, c))]
+			if !strings.HasPrefix(l, c+c+c) {
+				continue
+			}
+			fence := l[:len(l)-len(strings.TrimLeft(l, c))]
+			if c == "`" && strings.Contains(l[len(fence):], "`") {
 				break
 			}
+			indent, open = lead, fence
+			break
 		}
 	}
-	return open
+	if open == "" {
+		return ""
+	}
+	return indent + open
 }
 
 // agentReply finds the reply to attach for jot e, or says why it cannot.
