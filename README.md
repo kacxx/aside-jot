@@ -2,27 +2,27 @@
 
 A side channel for thoughts while you work with coding agents.
 
-Type `>> some thought` into Claude Code or Codex. aside saves it with its git
-context (repo, branch, commit) and **blocks the prompt**, so the model never
-sees it. Your flow isn't interrupted and the agent's context stays clean.
+Mid-task, you think of something unrelated: a bug to check, a ticket to raise,
+a question for someone. Telling the agent derails it, and switching to a notes
+app breaks your flow. With aside, you type it into the agent with `>>` in
+front:
 
 ```
 >> token cache TTL looks too long, check with infra before shipping
 ✓ Jotted #12
 ```
 
-Later, review your notes with `aside inbox`, find the chat where you worked on
-something with `aside find`, or let an agent read them through the read-only
-MCP server.
+aside saves it with its git context (repo, branch, commit) and **blocks the
+prompt**, so the model never sees it. The agent's context stays clean, and you
+keep working.
+
+Works with **Claude Code** and **Codex**. Not Cursor: it sends a blocked prompt
+to the model with your next message ([why](docs/cursor.md)).
 
 ![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "jot done" clears it](docs/demo.gif)
 
 *Recorded with the real Claude Code CLI before the command was renamed from
 `jot` to `aside`.*
-
-> **aside does not work with Cursor.** Cursor sends a blocked prompt to the
-> model with your next message, so a jot there is not private. See
-> [docs/cursor.md](docs/cursor.md).
 
 ## Install
 
@@ -69,10 +69,24 @@ Add to `~/.codex/hooks.json`, then run `/hooks` in the **Codex CLI** and
 ### Check it works
 
 Type `>> test` in the agent. You should see `✓ Jotted #N` and no reply from
-the model. Then run `aside inbox` in a terminal.
+the model. Then run `aside inbox` in a terminal. If your shell can't find
+`aside`, add `$(go env GOPATH)/bin` to your `PATH`.
 
 Windows paths, project-level configs, Codex trust details and known agent
 behaviour: [docs/setup.md](docs/setup.md).
+
+## A day with aside
+
+- **Morning.** Deep in a refactor, you jot three things without stopping:
+  `>> SUP-4821 needs a backend ticket` (#21), `>> ask infra about the cache
+  TTL` (#22) and `>> flaky test in billing, look later` (#23).
+- **Lunch.** `aside inbox` lists them, newest first, with the repo and branch
+  each came from. You fix the flaky test and run `aside done 23`.
+- **Afternoon.** The ticket note deserves an issue. Since you jotted it in
+  Claude Code, `aside promote 21 --with-reply` shows you an issue with your jot and the
+  agent's explanation, and creates it in that repo when you say yes.
+- **Friday.** Someone asks about SUP-4821. `aside find SUP-4821` lists the
+  chats where you jotted about it, with the command to reopen each one.
 
 ## Using aside
 
@@ -177,23 +191,6 @@ but can't add, change or close them.
   saving fails, how `find` matches, `promote` in full, and storage.
 - [docs/cursor.md](docs/cursor.md): why Cursor isn't supported and what was
   tested.
-- [docs/decisions.md](docs/decisions.md): why aside works the way it does.
-
-### Not in v1 (on purpose)
-
-No priorities, tags or workflows beyond inbox and done; no trackers other than
-GitHub issues, and nothing created automatically; no LLM inside aside; no sync
-(use `aside backup`); no UI beyond the CLI and MCP. Capturing has to be instant,
-reliable and invisible to the model. Everything else can come later.
-
-## Development
-
-```sh
-go test -race ./...
-golangci-lint run   # v2.14.0, config in .golangci.yml
-```
-
-See [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) for an end-to-end check against
-the built binary, and [docs/mvp-validation.md](docs/mvp-validation.md) for the
-recorded results of the initial version. [AGENTS.md](AGENTS.md) is the starting
-point for coding agents.
+- [docs/decisions.md](docs/decisions.md): why aside works the way it does, and
+  what's left out on purpose.
+- [AGENTS.md](AGENTS.md): building, testing and contributing.

@@ -19,7 +19,9 @@ go install ./cmd/aside
 ```
 
 This installs `aside` into `$(go env GOPATH)/bin` (usually `~/go/bin`; on
-Windows, usually `$env:USERPROFILE\go\bin`). Check where it will store data and
+Windows, usually `$env:USERPROFILE\go\bin`). Don't alias it to `jot`, its old
+name: macOS and the BSDs ship `/usr/bin/jot`, a number-sequence tool, which
+can run instead. Check where it will store data and
 where the binary is.
 
 macOS, Linux and the BSDs:
