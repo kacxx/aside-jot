@@ -85,8 +85,10 @@ records the results for the initial version.
   if the agent changed directory. `sessions.go` reads the first `cwd` in the
   Claude transcript (`transcript_path` in the jot's metadata). Codex resumes
   from any directory, so its resume command has no `cd`.
-- **The MCP server is read-only by design.** Agents can read jots but not
-  create, edit or close them.
+- **The MCP server is read-only by design.** Through it, agents can read jots
+  but not create, edit or close them. That's all it guarantees: an agent with
+  shell access can run `aside done`, guarded only by its command approval. Don't
+  add write tools to the server, and don't claim more than this in docs.
 - **Hook paths are absolute.** Hook and MCP configs use the full path to the
   binary; `aside paths` warns when a bare `aside` would run something else.
 
