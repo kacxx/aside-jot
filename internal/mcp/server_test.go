@@ -360,7 +360,9 @@ func TestFindTool(t *testing.T) {
 					ResumeCommand string      `json:"resume_command"`
 					Matches       []app.Entry `json:"matches"`
 				} `json:"sessions"`
-				NotInASession []app.Entry `json:"not_in_a_session"`
+				NotInASession      []app.Entry `json:"not_in_a_session"`
+				TotalSessions      int         `json:"total_sessions"`
+				TotalNotInASession int         `json:"total_not_in_a_session"`
 			} `json:"structuredContent"`
 		} `json:"result"`
 	}
@@ -388,7 +390,45 @@ func TestFindTool(t *testing.T) {
 	}
 	sc = r.Result.StructuredContent
 	if len(sc.Sessions) != 1 || sc.Sessions[0].SessionID != "s3" ||
-		len(sc.NotInASession) != 1 || sc.NotInASession[0].ID != 6 {
+		len(sc.NotInASession) != 1 || sc.NotInASession[0].ID != 6 ||
+		sc.TotalSessions != 2 || sc.TotalNotInASession != 2 {
 		t.Fatalf("find with limit 1: %s", lines[2])
+	}
+}
+
+func TestFindToolCapsSessionMatches(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	for i := 1; i <= 7; i++ {
+		if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "fix " + strconv.Itoa(i), Source: "codex", SessionID: "s1"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find","arguments":{"query":"fix"}}}`
+	var out bytes.Buffer
+	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Sessions []struct {
+					MatchCount int         `json:"match_count"`
+					Matches    []app.Entry `json:"matches"`
+				} `json:"sessions"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	ss := r.Result.StructuredContent.Sessions
+	if len(ss) != 1 || ss[0].MatchCount != 7 || len(ss[0].Matches) != maxSessionMatches ||
+		ss[0].Matches[0].Text != "fix 3" || ss[0].Matches[maxSessionMatches-1].Text != "fix 7" {
+		t.Fatalf("capped matches: %s", out.String())
 	}
 }
