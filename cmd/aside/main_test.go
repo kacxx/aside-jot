@@ -269,3 +269,44 @@ func TestPromoteCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestInboxShowsAge(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	ctx := context.Background()
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "fresh thought", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Close()
+	old := now
+	t.Cleanup(func() { now = old })
+	now = time.Now
+	sh := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := run(args, strings.NewReader(""), &out); err != nil {
+			t.Fatalf("aside %v: %v", args, err)
+		}
+		return out.String()
+	}
+	got := sh("inbox")
+	if !strings.Contains(got, "today  fresh thought") || strings.Contains(got, "20") {
+		t.Fatalf("inbox today: %q", got)
+	}
+	now = func() time.Time { return time.Now().AddDate(0, 0, 3) }
+	if got := sh("inbox"); !strings.Contains(got, "#1    3d     fresh thought") {
+		t.Fatalf("inbox 3d: %q", got)
+	}
+	if got := sh("inbox", "--older", "3"); !strings.Contains(got, "fresh thought") {
+		t.Fatalf("--older 3: %q", got)
+	}
+	if got := sh("inbox", "--older", "4"); got != "No inbox jots are 4 or more days old.\n" {
+		t.Fatalf("--older 4: %q", got)
+	}
+	if got := sh("show", "1"); !strings.Contains(got, "created:") {
+		t.Fatalf("show keeps the timestamp: %q", got)
+	}
+}

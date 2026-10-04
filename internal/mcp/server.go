@@ -15,6 +15,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/kacxx/aside-jot/internal/app"
 )
@@ -50,11 +51,12 @@ type Reader interface {
 type Server struct {
 	svc     Reader
 	version string
+	now     func() time.Time
 }
 
 // NewServer returns a server backed by svc.
 func NewServer(svc Reader, version string) *Server {
-	return &Server{svc: svc, version: version}
+	return &Server{svc: svc, version: version, now: time.Now}
 }
 
 type request struct {
@@ -208,7 +210,7 @@ const maxLimit = 200
 var tools = []map[string]any{
 	{
 		"name":        "inbox",
-		"description": "List the newest jots still in the user's inbox (not marked done).",
+		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today).",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -267,7 +269,12 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	case "inbox":
 		var es []app.Entry
 		es, err = s.svc.Inbox(ctx, args.Limit)
-		v = map[string]any{"entries": nonNil(es)}
+		now := s.now()
+		aged := make([]agedEntry, 0, len(es))
+		for _, e := range es {
+			aged = append(aged, agedEntry{Entry: e, AgeDays: app.AgeDays(e.CreatedAt, now)})
+		}
+		v = map[string]any{"entries": aged}
 	case "show":
 		if args.ID <= 0 {
 			return toolError("id is required and must be a positive integer"), nil
@@ -329,6 +336,13 @@ func toolError(msg string) map[string]any {
 		"content": []map[string]any{{"type": "text", "text": msg}},
 		"isError": true,
 	}
+}
+
+// agedEntry is an inbox entry with its age in calendar days (local time),
+// computed when listing; it is not stored.
+type agedEntry struct {
+	app.Entry
+	AgeDays int `json:"age_days"`
 }
 
 func nonNil(es []app.Entry) []app.Entry {
