@@ -109,7 +109,7 @@ func TestPromoteConfirm(t *testing.T) {
 
 	svc := promoteService(t, repoInfo)
 	f := newRunner()
-	_, err := svc.Promote(ctx, f, PromoteRequest{ID: 1, Confirm: func(Promotion) bool { return false }})
+	_, err := svc.Promote(ctx, f, PromoteRequest{ID: 1, Confirm: func(Promotion) error { return ErrNotConfirmed }})
 	if !errors.Is(err, ErrNotConfirmed) {
 		t.Fatalf("declined: err = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestPromoteConfirm(t *testing.T) {
 
 	var shown Promotion
 	f = newRunner()
-	p, err := svc.Promote(ctx, f, PromoteRequest{ID: 1, Confirm: func(p Promotion) bool { shown = p; return true }})
+	p, err := svc.Promote(ctx, f, PromoteRequest{ID: 1, Confirm: func(p Promotion) error { shown = p; return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestPromoteConfirm(t *testing.T) {
 
 	called := false
 	if _, err := promoteService(t, repoInfo).Promote(ctx, newRunner(), PromoteRequest{ID: 1, DryRun: true,
-		Confirm: func(Promotion) bool { called = true; return true }}); err != nil {
+		Confirm: func(Promotion) error { called = true; return nil }}); err != nil {
 		t.Fatal(err)
 	}
 	if called {

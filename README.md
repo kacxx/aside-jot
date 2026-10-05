@@ -168,8 +168,8 @@ SUP-4821?". The server is **read-only**: through it, agents can read and
 search your jots, but not add, change or close them. An agent that can run
 shell commands can still run `aside` itself: `aside done` when you ask it to
 close jots, or `aside promote`, which posts a jot to GitHub. `promote` asks
-first and refuses to run without a terminal, so an agent has to pass `--yes`,
-which shows in the command. Your agent's command approval is what guards that,
+first and refuses to run when stdin isn't a terminal, so an agent has to pass
+`--yes`, which shows in the command (a pseudo-terminal can still answer it). Your agent's command approval is what guards that,
 and in auto-approve modes little or nothing does.
 
 ## All commands

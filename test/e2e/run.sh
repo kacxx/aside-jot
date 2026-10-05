@@ -72,8 +72,11 @@ echo "$DRY" | grep -q "^repo:  o/n" && echo "$DRY" | grep -q "^title: e2e promot
 "$BIN" show "$PID" | grep -q "(inbox)" && ok "dry run leaves the jot in the inbox" || bad "dry run changed the jot"
 "$BIN" promote 999999 --repo o/n --dry-run >/dev/null 2>&1 && bad "promote of an unknown id exited 0" \
   || ok "promote of an unknown id exits non-zero"
-printf 'y\n' | "$BIN" promote "$PID" --repo o/n >/dev/null 2>&1 && bad "promote with piped input and no --yes exited 0" \
-  || ok "promote refuses to ask without a terminal"
+# A stub gh that succeeds silently, so a regression can't create a real issue.
+mkdir -p "$TMP/stubbin"; printf '#!/bin/sh\nexit 0\n' >"$TMP/stubbin/gh"; chmod +x "$TMP/stubbin/gh"
+REFUSED="$(printf 'y\n' | PATH="$TMP/stubbin:$PATH" "$BIN" promote "$PID" --repo o/n 2>&1)" && bad "promote with piped input and no --yes exited 0" \
+  || { echo "$REFUSED" | grep -q "not a terminal" && ok "promote refuses to ask without a terminal" \
+  || bad "promote failed, but not with the terminal refusal: $REFUSED"; }
 
 hr "5. hooks: >> captured, normal passes through (per-agent schemas printed)"
 for agent in claude codex cursor; do

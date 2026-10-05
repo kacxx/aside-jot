@@ -110,11 +110,13 @@ it doesn't exist.
 
 **Update ([#45](https://github.com/kacxx/aside-jot/issues/45)):** `promote`
 now always shows the issue and asks `[y/N]`, and refuses to run when stdin is
-not a terminal unless `--yes` is passed (`--dry-run` is unchanged). A piped "y"
+not a terminal unless `--yes` is passed (`--dry-run` is unchanged). A plain pipe
 can't answer, so an agent has to pass `--yes`, which the user or their approval
-rules can see in the command. This stops accidental publishing; it doesn't stop
-an agent that deliberately passes `--yes`, which still relies on command
-approval.
+rules can see in the command. This stops accidental publishing, and only
+covers a plain pipe: a pseudo-terminal (an agent shell that allocates one, or
+`script`) can still answer the question, and an agent that deliberately passes
+`--yes` still relies on command approval. The question goes to stderr so
+`$(aside promote 12 --yes)` and pipes keep stdout clean.
 
 **Revisit if:** jots are changed or promoted in ways users didn't ask for.
 
