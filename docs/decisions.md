@@ -160,8 +160,12 @@ archived sessions (the handler ignores them) and sessions whose file is gone.
 The Desktop id is the one the hook stored, but it is only used after Desktop's
 session file of that name confirms it belongs to the jot's session
 (`cliSessionId`) and isn't archived. Jots without it are found by reading
-the first 4 KB of the session files newest first, stopping when all are found;
-misses are remembered for the life of the process. No cache, no schema change.
+the first 4 KB of the session files newest first, stopping when all are found
+or at the first file modified before the oldest jot looked for (Desktop
+rewrites a file as the chat goes on, so it can't predate a jot in it). A miss
+is remembered for 10 minutes, and not at all for a jot captured in the last 10,
+since Desktop may not have written the file yet; a stored id is checked before
+the remembered misses. No cache, no schema change.
 Ids are checked against a UUID (or `local_` UUID) shape before they go in a
 link.
 

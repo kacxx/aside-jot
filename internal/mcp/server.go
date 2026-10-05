@@ -240,7 +240,7 @@ var tools = []map[string]any{
 	},
 	{
 		"name":        "search",
-		"description": "Search all jots (inbox and done) for a substring, newest first.",
+		"description": "Search all jots (inbox and done) for a substring, newest first. Entries have open_url like inbox.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -318,6 +318,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	case "search":
 		var es []app.Entry
 		es, err = s.svc.Search(ctx, args.Query, args.Limit)
+		s.svc.AddOpenURLs(es)
 		v = map[string]any{"entries": nonNil(es)}
 	case "find":
 		var ss []app.Session

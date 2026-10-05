@@ -46,7 +46,23 @@ type linkRef struct {
 	desktopHint       string // claude_desktop_session_id from the hook, unchecked
 	entrypoint        string
 	transcript        string
+	oldest, newest    time.Time // when the session's jots were captured
 }
+
+// want is what find needs to look a Claude session up.
+type want struct {
+	hint  string    // Desktop id the hook recorded, unchecked
+	since time.Time // the session file can't be older than its oldest jot
+	fresh bool      // a jot is recent: a miss may only mean the file isn't written yet
+}
+
+// missTTL is how long a miss is remembered, and how recent a jot must be to
+// not be remembered as one at all.
+const missTTL = 10 * time.Minute
+
+// scanSlack is subtracted from a jot's time before it is used as the point
+// the scan stops at, to allow for clocks and file system timestamps.
+const scanSlack = time.Minute
 
 type desktopSession struct {
 	localID  string
@@ -58,7 +74,8 @@ type desktopSession struct {
 type desktopLinks struct {
 	mu     sync.Mutex
 	dir    string
-	misses map[string]bool
+	misses map[string]time.Time // Claude session id -> when it was missed
+	now    func() time.Time
 }
 
 // SetDesktopSessionsDir sets the directory holding Claude Desktop's session
@@ -114,6 +131,12 @@ func refFor(es []Entry) linkRef {
 	var r linkRef
 	for _, e := range es {
 		r.source, r.sessionID = e.Source, e.SessionID
+		if r.oldest.IsZero() || e.CreatedAt.Before(r.oldest) {
+			r.oldest = e.CreatedAt
+		}
+		if e.CreatedAt.After(r.newest) {
+			r.newest = e.CreatedAt
+		}
 		var m struct {
 			Transcript string `json:"transcript_path"`
 			Desktop    string `json:"claude_desktop_session_id"`
@@ -137,17 +160,25 @@ func refFor(es []Entry) linkRef {
 
 func (s *Service) openURLs(refs []linkRef) []string {
 	out := make([]string, len(refs))
-	want := map[string]string{} // Claude session id -> Desktop id hint
+	wants := map[string]want{}
 	for i, r := range refs {
 		switch {
 		case !uuidShape.MatchString(r.sessionID):
 		case r.source == "codex":
 			out[i] = "codex://threads/" + url.PathEscape(r.sessionID)
-		case r.source == "claude" && s.desktop.dir != "" && claudeEntrypoint(r) == desktopEntrypoint:
-			want[r.sessionID] = r.desktopHint
+		case r.source == "claude" && claudeEntrypoint(r) == desktopEntrypoint:
+			w := wants[r.sessionID]
+			if w.hint == "" {
+				w.hint = r.desktopHint
+			}
+			if w.since.IsZero() || r.oldest.Before(w.since) {
+				w.since = r.oldest
+			}
+			w.fresh = w.fresh || s.desktop.clock().Sub(r.newest) < missTTL
+			wants[r.sessionID] = w
 		}
 	}
-	found := s.desktop.find(want)
+	found := s.desktop.find(wants)
 	for i, r := range refs {
 		if d, ok := found[r.sessionID]; ok && out[i] == "" && !d.archived {
 			out[i] = "claude://code/continue?session=" + url.QueryEscape(d.localID)
@@ -189,37 +220,49 @@ func transcriptEntrypoint(path string) string {
 	return ""
 }
 
-// find returns the Desktop session for each Claude session id in want (id to
-// the Desktop id the hook recorded, or ""). A hint is checked against its
-// file first; the rest are looked for newest file first, stopping once all
-// are found. An id with no file is remembered as missing.
-func (d *desktopLinks) find(want map[string]string) map[string]desktopSession {
+func (d *desktopLinks) clock() time.Time {
+	if d.now != nil {
+		return d.now()
+	}
+	return time.Now()
+}
+
+// find returns the Desktop session for each Claude session id in wants. A
+// hint is checked against its file first, even for an id remembered as
+// missing. The rest are looked for newest file first, stopping once all are
+// found or once files are older than the oldest jot looked for: Desktop
+// rewrites a session's file as the chat goes on, so the file can't predate a
+// jot in it. An id not found is remembered as missing for missTTL, unless a
+// jot of it is recent, since Desktop may not have written its file yet.
+func (d *desktopLinks) find(wants map[string]want) map[string]desktopSession {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	found := map[string]desktopSession{}
-	if len(want) == 0 || d.dir == "" {
+	if len(wants) == 0 || d.dir == "" {
 		return found
 	}
+	now := d.clock()
 	files, _ := filepath.Glob(filepath.Join(d.dir, "*", "*", "local_*.json"))
-	pending := map[string]bool{}
-	for id, hint := range want {
-		if d.misses[id] {
+	pending := map[string]want{}
+	for id, w := range wants {
+		if desktopIDShape.MatchString(w.hint) {
+			for _, f := range files {
+				if filepath.Base(f) != w.hint+".json" {
+					continue
+				}
+				if cli, archived, ok := readHeader(f); ok && cli == id {
+					found[id] = desktopSession{w.hint, archived}
+				}
+				break
+			}
+		}
+		if _, ok := found[id]; ok {
 			continue
 		}
-		pending[id] = true
-		if !desktopIDShape.MatchString(hint) {
+		if at, missed := d.misses[id]; missed && now.Sub(at) < missTTL {
 			continue
 		}
-		for _, f := range files {
-			if filepath.Base(f) != hint+".json" {
-				continue
-			}
-			if cli, archived, ok := readHeader(f); ok && cli == id {
-				found[id] = desktopSession{hint, archived}
-				delete(pending, id)
-			}
-			break
-		}
+		pending[id] = w
 	}
 	if len(pending) > 0 {
 		type file struct {
@@ -233,22 +276,31 @@ func (d *desktopLinks) find(want map[string]string) map[string]desktopSession {
 			}
 		}
 		sort.Slice(byAge, func(i, j int) bool { return byAge[i].mod.After(byAge[j].mod) })
+		var stop time.Time // files older than this can't hold a pending session
+		for _, w := range pending {
+			if stop.IsZero() || w.since.Before(stop) {
+				stop = w.since
+			}
+		}
+		stop = stop.Add(-scanSlack)
 		for _, f := range byAge {
-			if len(pending) == 0 {
+			if len(pending) == 0 || f.mod.Before(stop) {
 				break
 			}
 			cli, archived, ok := readHeader(f.path)
 			local := filepath.Base(f.path[:len(f.path)-len(".json")])
-			if ok && pending[cli] && desktopIDShape.MatchString(local) {
+			if _, want := pending[cli]; ok && want && desktopIDShape.MatchString(local) {
 				found[cli] = desktopSession{local, archived}
 				delete(pending, cli)
 			}
 		}
 		if d.misses == nil {
-			d.misses = map[string]bool{}
+			d.misses = map[string]time.Time{}
 		}
-		for id := range pending {
-			d.misses[id] = true
+		for id, w := range pending {
+			if !w.fresh {
+				d.misses[id] = now
+			}
 		}
 	}
 	return found
