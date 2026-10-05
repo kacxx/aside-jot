@@ -206,7 +206,7 @@ only you write jots, never the model. `inbox` entries carry `age_days`
 (calendar days since the jot, local time; 0 = today). Likewise there is no promote tool: only
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
 
-`inbox`, `show` and `find` also return `open_url`, a link to the chat a jot
+`inbox`, `show`, `search` and `find` also return `open_url`, a link to the chat a jot
 came from, for the agent to show you as a clickable link (the tools open
 nothing). It is set for Codex app threads (`codex://threads/<id>`) and for
 Claude Desktop sessions (`claude://code/continue?session=local_<id>`, which

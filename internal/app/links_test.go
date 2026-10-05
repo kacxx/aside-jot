@@ -67,8 +67,8 @@ func TestOpenURLDesktop(t *testing.T) {
 	dir := t.TempDir()
 	svc := sessionService(t)
 	svc.SetDesktopSessionsDir(dir)
-	desktopFile(t, dir, localA, cliA, false, time.Hour)
-	desktopFile(t, dir, localB, cliB, true, 2*time.Hour)
+	desktopFile(t, dir, localA, cliA, false, time.Second)
+	desktopFile(t, dir, localB, cliB, true, 2*time.Second)
 	want := "claude://code/continue?session=" + localA
 
 	// Id recorded at capture.
@@ -99,12 +99,13 @@ func TestOpenURLDesktop(t *testing.T) {
 			t.Fatalf("entrypoint %q: got %q", ep, got)
 		}
 	}
-	// A session with no file is a miss, remembered.
+	// A session with no file is a miss, remembered once its jot isn't recent.
+	svc.desktop.now = func() time.Time { return time.Now().Add(time.Hour) }
 	m := map[string]any{"claude_entrypoint": "claude-desktop"}
 	if got := openURL(svc, jotMeta(t, svc, "claude", "33333333-3333-4333-8333-333333333333", m)); got != "" {
 		t.Fatalf("missing: got %q", got)
 	}
-	if !svc.desktop.misses["33333333-3333-4333-8333-333333333333"] {
+	if _, ok := svc.desktop.misses["33333333-3333-4333-8333-333333333333"]; !ok {
 		t.Fatal("miss not remembered")
 	}
 	// Bad ids never reach a link.
@@ -122,7 +123,7 @@ func TestOpenURLEntrypointFromTranscript(t *testing.T) {
 	dir := t.TempDir()
 	svc := sessionService(t)
 	svc.SetDesktopSessionsDir(dir)
-	desktopFile(t, dir, localA, cliA, false, time.Hour)
+	desktopFile(t, dir, localA, cliA, false, time.Second)
 	tr := filepath.Join(t.TempDir(), "t.jsonl")
 	if err := os.WriteFile(tr, []byte("{\"type\":\"summary\"}\n{\"cwd\":\"/x\",\"entrypoint\":\"claude-desktop\"}\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -158,5 +159,89 @@ func TestFindSetsOpenURL(t *testing.T) {
 	ss, _, err := svc.Find(ctx, "note")
 	if err != nil || len(ss) != 1 || ss[0].OpenURL != "codex://threads/"+cliA {
 		t.Fatalf("%+v %v", ss, err)
+	}
+}
+
+// A jot captured long ago is looked for only in files modified since it was
+// captured, and a miss is remembered; a stored id is still checked first.
+func TestOpenURLMisses(t *testing.T) {
+	dir := t.TempDir()
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir(dir)
+	clock := time.Now()
+	svc.desktop.now = func() time.Time { return clock }
+	m := map[string]any{"claude_entrypoint": "claude-desktop"}
+
+	// Not in the files, and not recent: a miss, remembered.
+	clock = time.Now().Add(time.Hour)
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got != "" {
+		t.Fatalf("got %q", got)
+	}
+	if _, ok := svc.desktop.misses[cliA]; !ok {
+		t.Fatal("miss not remembered")
+	}
+	// The file appears; the remembered miss still holds, until it expires.
+	desktopFile(t, dir, localA, cliA, false, 0)
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got != "" {
+		t.Fatalf("remembered miss: got %q", got)
+	}
+	// ...but a stored id is checked before the miss cache.
+	hinted := map[string]any{"claude_entrypoint": "claude-desktop", "claude_desktop_session_id": localA}
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, hinted)); got != "claude://code/continue?session="+localA {
+		t.Fatalf("hint behind a miss: got %q", got)
+	}
+	clock = clock.Add(missTTL + time.Minute)
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got == "" {
+		t.Fatal("expired miss not retried")
+	}
+}
+
+// A session whose file isn't written yet, for a jot just captured, is not
+// remembered as missing.
+func TestOpenURLFreshMissNotRemembered(t *testing.T) {
+	dir := t.TempDir()
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir(dir)
+	m := map[string]any{"claude_entrypoint": "claude-desktop"}
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got != "" {
+		t.Fatalf("got %q", got)
+	}
+	if _, ok := svc.desktop.misses[cliA]; ok {
+		t.Fatal("a fresh jot's miss was remembered")
+	}
+	desktopFile(t, dir, localA, cliA, false, 0)
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got != "claude://code/continue?session="+localA {
+		t.Fatalf("after the file appeared: got %q", got)
+	}
+}
+
+// The scan stops at files older than the oldest jot looked for.
+func TestOpenURLScanStopsAtJotTime(t *testing.T) {
+	dir := t.TempDir()
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir(dir)
+	desktopFile(t, dir, localA, cliA, false, 3*time.Hour) // older than the jot
+	m := map[string]any{"claude_entrypoint": "claude-desktop"}
+	if got := openURL(svc, jotMeta(t, svc, "claude", cliA, m)); got != "" {
+		t.Fatalf("a file older than the jot was used: %q", got)
+	}
+}
+
+// One jot's missing stored id doesn't replace another's.
+func TestOpenURLKeepsFirstHint(t *testing.T) {
+	dir := t.TempDir()
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir(dir)
+	desktopFile(t, dir, localA, cliA, false, time.Second)
+	ep := map[string]any{"claude_entrypoint": "claude-desktop"}
+	hinted := map[string]any{"claude_entrypoint": "claude-desktop", "claude_desktop_session_id": localA}
+	es := []Entry{jotMeta(t, svc, "claude", cliA, hinted), jotMeta(t, svc, "claude", cliA, ep)}
+	refs := []linkRef{refFor(es[:1]), refFor(es[1:])}
+	svc.openURLs(refs)
+	if _, ok := svc.desktop.misses[cliA]; ok {
+		t.Fatal("session recorded as missing")
+	}
+	if got := svc.openURLs(refs); got[0] == "" || got[1] == "" {
+		t.Fatalf("got %q", got)
 	}
 }
