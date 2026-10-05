@@ -198,6 +198,48 @@ func TestClaudeCaptureInRepo(t *testing.T) {
 	assertBlockedOK(t, b, 2)
 }
 
+func TestClaudeCaptureDesktopEnv(t *testing.T) {
+	const id = "local_7d6831ca-0cab-461d-8d71-d3f9f9aeaf3c"
+	cases := []struct {
+		name, hostID, entrypoint string
+		want                     map[string]any
+	}{
+		{"desktop", id, "claude-desktop", map[string]any{
+			store.MetaDesktopSession: id, store.MetaClaudeEntrypoint: "claude-desktop"}},
+		{"unset", "", "", map[string]any{}},
+		{"cli", "", "cli", map[string]any{store.MetaClaudeEntrypoint: "cli"}},
+		{"bare uuid", "7d6831ca-0cab-461d-8d71-d3f9f9aeaf3c", "", map[string]any{}},
+		{"uppercase", "local_7D6831CA-0CAB-461D-8D71-D3F9F9AEAF3C", "", map[string]any{}},
+		{"injection", id + "&q=x", "claude desktop\n", map[string]any{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv(envHostSessionID, c.hostID)
+			t.Setenv(envEntrypoint, c.entrypoint)
+			open, path := tempDB(t)
+			_, b := runClaude(t, fixture(t, "claude", "capture", map[string]any{"cwd": t.TempDir()}), open)
+			assertBlockedOK(t, b, 1)
+
+			var meta map[string]any
+			if err := json.Unmarshal(entries(t, path)[0].Metadata, &meta); err != nil {
+				t.Fatal(err)
+			}
+			if meta[store.MetaTranscriptPath] == nil {
+				t.Fatalf("transcript_path missing: %v", meta)
+			}
+			delete(meta, store.MetaTranscriptPath)
+			if len(meta) != len(c.want) {
+				t.Fatalf("metadata = %v, want %v", meta, c.want)
+			}
+			for k, v := range c.want {
+				if meta[k] != v {
+					t.Fatalf("metadata[%s] = %v, want %v", k, meta[k], v)
+				}
+			}
+		})
+	}
+}
+
 func TestClaudeCaptureDetachedHEAD(t *testing.T) {
 	repo := gitRepo(t)
 	git(t, repo, "checkout", "-q", "--detach")
@@ -468,6 +510,8 @@ func TestClaudeOnCursorEventPassThrough(t *testing.T) {
 // Issue #23: a silent Claude hook made Cursor submit a jot that `aside hook
 // cursor` had blocked. On beforeSubmitPrompt it must block in Cursor format.
 func TestClaudeOnCursorEventBlocks(t *testing.T) {
+	t.Setenv(envHostSessionID, "local_7d6831ca-0cab-461d-8d71-d3f9f9aeaf3c")
+	t.Setenv(envEntrypoint, "claude-desktop")
 	repo := gitRepo(t)
 	open, path := tempDB(t)
 	_, o := runClaudeAsCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{"workspace_roots": []string{repo}}), open)
@@ -477,6 +521,12 @@ func TestClaudeOnCursorEventBlocks(t *testing.T) {
 	e := entries(t, path)[0]
 	if e.Source != "cursor" || e.SessionID != "e5b0a1c7-3d2f-4c8e-9a14-7f6d2b0c8e31" || e.Cwd != repo {
 		t.Fatalf("entry: %+v", e)
+	}
+	// A Cursor jot never records Claude Desktop's environment.
+	for _, k := range []string{store.MetaDesktopSession, store.MetaClaudeEntrypoint} {
+		if strings.Contains(string(e.Metadata), k) {
+			t.Fatalf("cursor jot has %s: %s", k, e.Metadata)
+		}
 	}
 }
 
