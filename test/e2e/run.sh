@@ -72,6 +72,8 @@ echo "$DRY" | grep -q "^repo:  o/n" && echo "$DRY" | grep -q "^title: e2e promot
 "$BIN" show "$PID" | grep -q "(inbox)" && ok "dry run leaves the jot in the inbox" || bad "dry run changed the jot"
 "$BIN" promote 999999 --repo o/n --dry-run >/dev/null 2>&1 && bad "promote of an unknown id exited 0" \
   || ok "promote of an unknown id exits non-zero"
+printf 'y\n' | "$BIN" promote "$PID" --repo o/n >/dev/null 2>&1 && bad "promote with piped input and no --yes exited 0" \
+  || ok "promote refuses to ask without a terminal"
 
 hr "5. hooks: >> captured, normal passes through (per-agent schemas printed)"
 for agent in claude codex cursor; do

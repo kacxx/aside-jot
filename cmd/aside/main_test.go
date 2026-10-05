@@ -221,15 +221,24 @@ func (f *ghFake) Run(_ context.Context, _ io.Reader, name string, args ...string
 	return nil, nil
 }
 
+// setTerminal makes promote treat stdin as a terminal (or not) for the test.
+func setTerminal(t *testing.T, isTerminal bool) {
+	t.Helper()
+	old := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return isTerminal }
+	t.Cleanup(func() { stdinIsTerminal = old })
+}
+
 func TestPromoteCLI(t *testing.T) {
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	setTerminal(t, true)
 	f := &ghFake{}
 	old := promoteRunner
 	promoteRunner = f
 	t.Cleanup(func() { promoteRunner = old })
 	aside := func(args ...string) (string, error) {
 		var out bytes.Buffer
-		err := run(args, nil, &out)
+		err := run(args, strings.NewReader("y\n"), &out)
 		return out.String(), err
 	}
 
@@ -251,7 +260,7 @@ func TestPromoteCLI(t *testing.T) {
 	if _, err := aside("promote", "1"); err == nil || !strings.Contains(err.Error(), "pass --repo") {
 		t.Fatalf("no repo: %v", err)
 	}
-	if out, err := aside("promote", "--repo=o/n", "#1"); err != nil || out != "https://github.com/o/n/issues/7\n" {
+	if out, err := aside("promote", "--repo=o/n", "#1"); err != nil || !strings.HasSuffix(out, "Create this issue? [y/N] https://github.com/o/n/issues/7\n") {
 		t.Fatalf("promote: %q, %v", out, err)
 	}
 	if out, _ := aside("show", "1"); !strings.Contains(out, "(done)") || !strings.Contains(out, "issue:     https://github.com/o/n/issues/7") {
@@ -314,6 +323,7 @@ func TestInboxShowsAge(t *testing.T) {
 func TestPromoteWithReplyCLI(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	setTerminal(t, true)
 	f := &ghFake{}
 	old := promoteRunner
 	promoteRunner = f
@@ -376,5 +386,70 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 	if out, err := aside("", "promote", "2", "--repo", "o/n", "--with-reply", "--yes"); err != nil ||
 		strings.Contains(out, "[y/N]") || issues() != 2 {
 		t.Fatalf("--yes: %q, %v", out, err)
+	}
+}
+
+func TestPromoteConfirmCLI(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	f := &ghFake{}
+	old := promoteRunner
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner = old })
+	aside := func(stdin string, args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(stdin), &out)
+		return out.String(), err
+	}
+	issues := func() int {
+		n := 0
+		for _, c := range f.calls {
+			if strings.HasPrefix(c, "gh issue") {
+				n++
+			}
+		}
+		return n
+	}
+	for _, text := range []string{"one", "two", "three", "four"} {
+		if _, err := aside("", "add", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// No terminal and no --yes: refused, even with "y" piped in.
+	setTerminal(t, false)
+	if out, err := aside("y\n", "promote", "1", "--repo", "o/n"); err == nil ||
+		!strings.Contains(err.Error(), "not a terminal") || strings.Contains(out, "[y/N]") || len(f.calls) != 0 {
+		t.Fatalf("no terminal: %q, %v, %v", out, err, f.calls)
+	}
+	// A dry run needs no answer, so it works without a terminal.
+	if out, err := aside("", "promote", "1", "--repo", "o/n", "--dry-run"); err != nil ||
+		!strings.Contains(out, "title: one") || strings.Contains(out, "[y/N]") || len(f.calls) != 0 {
+		t.Fatalf("dry run: %q, %v", out, err)
+	}
+	// --yes works without a terminal and does not ask.
+	if out, err := aside("", "promote", "2", "--repo", "o/n", "--yes"); err != nil ||
+		strings.Contains(out, "[y/N]") || issues() != 1 {
+		t.Fatalf("--yes: %q, %v", out, err)
+	}
+
+	// With a terminal, plain promote shows the issue and asks.
+	setTerminal(t, true)
+	for _, answer := range []string{"", "n\n"} {
+		out, err := aside(answer, "promote", "1", "--repo", "o/n")
+		if err == nil || !strings.Contains(out, "repo:  o/n\ntitle: one") || !strings.HasSuffix(out, "[y/N] ") {
+			t.Fatalf("declined %q: %q, %v", answer, out, err)
+		}
+	}
+	if issues() != 1 {
+		t.Fatalf("declined promote ran %v", f.calls)
+	}
+	if out, err := aside("y\n", "promote", "1", "--repo", "o/n"); err != nil ||
+		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") || issues() != 2 {
+		t.Fatalf("confirmed: %q, %v", out, err)
+	}
+	// --yes skips the question on a terminal too.
+	if out, err := aside("", "promote", "3", "--repo", "o/n", "--yes"); err != nil ||
+		strings.Contains(out, "[y/N]") || issues() != 3 {
+		t.Fatalf("--yes on a terminal: %q, %v", out, err)
 	}
 }
