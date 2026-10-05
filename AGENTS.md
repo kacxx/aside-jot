@@ -92,7 +92,8 @@ records the results for the initial version.
   are undocumented, and a terminal `claude` started inside a Desktop session
   may inherit them, so check the id against Desktop's session file
   (`cliSessionId`) before building a link from it
-  ([#44](https://github.com/kacxx/aside-jot/issues/44)).
+  ([#44](https://github.com/kacxx/aside-jot/issues/44)); `internal/app/links.go`
+  does this and builds `open_url`.
 - **The MCP server is read-only by design.** Through it, agents can read jots
   but not create, edit or close them. That's all it guarantees: an agent with
   shell access can run `aside done` or `aside promote` (which publishes to

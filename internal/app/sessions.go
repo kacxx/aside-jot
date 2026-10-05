@@ -26,6 +26,8 @@ type Session struct {
 	Label Entry   // the newest "session:" jot, else the first jot
 	// Matches are the session's jots that matched a Find query, oldest first.
 	Matches []Entry
+	// OpenURL links to the chat, set by Find; "" when there is no link.
+	OpenURL string
 }
 
 // Latest returns the session's newest jot.
@@ -129,6 +131,7 @@ func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error
 		}
 	}
 	setStartDirs(found)
+	s.addSessionOpenURLs(found)
 	return found, loose, nil
 }
 

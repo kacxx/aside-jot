@@ -88,6 +88,9 @@ type Entry struct {
 	// IssueURL is metadata's issue_url, set when the jot was promoted to an
 	// issue. It is read from metadata, never written by Insert.
 	IssueURL string `json:"issue_url,omitempty"`
+	// OpenURL links to the jot's source chat. It is never stored; the app
+	// layer fills it in for the entries it returns on request.
+	OpenURL string `json:"open_url,omitempty"`
 }
 
 // MetaIssueURL is the metadata key holding a promoted jot's issue URL.

@@ -148,6 +148,36 @@ directory was deleted.
 
 **Revisit if:** either agent changes how it stores or finds sessions.
 
+## Open links rely on an undocumented Claude Desktop route
+
+**Decided:** `open_url` (MCP `inbox`, `show`, `find`; `aside show`) is
+`codex://threads/<id>` for Codex and, only when the session's entrypoint is
+exactly `claude-desktop`, `claude://code/continue?session=local_<id>` for
+Claude Desktop. The `continue` route is undocumented (found in Desktop
+2.19675.0's URL handler and clicked by hand), so everything else falls back to
+the resume command: other entrypoints (`cli`, `sdk-cli`, `claude-desktop-3p`),
+archived sessions (the handler ignores them) and sessions whose file is gone.
+The Desktop id is the one the hook stored, but it is only used after Desktop's
+session file of that name confirms it belongs to the jot's session
+(`cliSessionId`) and isn't archived. Jots without it are found by reading
+the first 4 KB of the session files newest first, stopping when all are found
+or at the first file modified before the oldest jot looked for (Desktop
+rewrites a file as the chat goes on, so it can't predate a jot in it). A miss
+is remembered for 10 minutes, and not at all for a jot captured in the last 10,
+since Desktop may not have written the file yet; a stored id is checked before
+the remembered misses. No persistent cache, no schema change.
+Ids are checked against a UUID (or `local_` UUID) shape before they go in a
+link.
+
+**Why:** most jots come from Claude Desktop and there is no documented way back
+to a session. Reading only the header of Desktop's files keeps the lookup small
+and avoids its settings. A wrong or stale link is worse than none, so every
+doubt means no link.
+
+**Revisit if:** Desktop changes or removes the route or its session files, or
+documents a link of its own. Windows and Linux Desktop paths are not checked, so
+there is no Desktop link there. Codex CLI-started threads and VS Code are untested.
+
 ## Promote only creates GitHub issues, on request
 
 **Decided:** `aside promote <id>` creates one GitHub issue through `gh`, only
