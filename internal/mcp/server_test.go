@@ -432,3 +432,39 @@ func TestFindToolCapsSessionMatches(t *testing.T) {
 		t.Fatalf("capped matches: %s", out.String())
 	}
 }
+
+func TestOpenURLInTools(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	const id = "11111111-1111-4111-8111-111111111111"
+	for _, req := range []app.CaptureRequest{
+		{Text: "from codex", Source: "codex", SessionID: id},
+		{Text: "from the terminal", Source: "cli"},
+	} {
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"inbox"}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"show","arguments":{"id":1}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"show","arguments":{"id":2}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find","arguments":{"query":"codex"}}}`
+	var out bytes.Buffer
+	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	want := `"open_url": "codex://threads/` + id + `"`
+	for _, i := range []int{0, 1, 3} {
+		if !strings.Contains(lines[i], strings.ReplaceAll(want, `": "`, `":"`)) {
+			t.Errorf("response %d has no open_url: %s", i+1, lines[i])
+		}
+	}
+	if strings.Contains(lines[2], "open_url") {
+		t.Errorf("a jot with no session got a link: %s", lines[2])
+	}
+}

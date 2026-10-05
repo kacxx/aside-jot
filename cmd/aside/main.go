@@ -198,7 +198,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		printEntry(stdout, e)
+		one := []app.Entry{e}
+		svc.AddOpenURLs(one)
+		printEntry(stdout, one[0])
 	case "search":
 		q := strings.Join(args, " ")
 		es, err := svc.Search(ctx, q, 0)
@@ -507,6 +509,7 @@ func printEntry(w io.Writer, e app.Entry) {
 	field("branch", e.Branch)
 	field("commit", e.CommitSHA)
 	field("issue", e.IssueURL)
+	field("open", e.OpenURL)
 	if len(e.Metadata) > 0 {
 		field("metadata", string(e.Metadata))
 	}

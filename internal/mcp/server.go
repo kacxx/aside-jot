@@ -46,6 +46,7 @@ type Reader interface {
 	Show(ctx context.Context, id int64) (app.Entry, error)
 	Search(ctx context.Context, q string, n int) ([]app.Entry, error)
 	Find(ctx context.Context, q string) ([]app.Session, []app.Entry, error)
+	AddOpenURLs(es []app.Entry)
 }
 
 // Server serves MCP requests against a Reader.
@@ -227,7 +228,9 @@ var tools = []map[string]any{
 	{
 		"name": "show",
 		"description": "Show one jot by id, including its git context and metadata. issue_url is set " +
-			"when the user has promoted the jot to an issue.",
+			"when the user has promoted the jot to an issue. open_url, when present, links to the chat the jot came " +
+			"from (Codex app, Claude Desktop): show it to the user as a link; this tool doesn't open it. If it is " +
+			"absent, the chat has no link and its resume command is in find.",
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
@@ -253,7 +256,7 @@ var tools = []map[string]any{
 		"description": "Find the agent sessions (Claude Code, Codex) where the user jotted about something, " +
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
-			"branch, and resume_command to reopen it (the user runs it; this tool doesn't). Only chats with " +
+			"branch, resume_command to reopen it (the user runs it; this tool doesn't), and open_url, a link to the chat when it has one (empty otherwise; show the user the link). Only chats with " +
 			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
 			"total_sessions and total_not_in_a_session are the counts before the cut. Each session lists its " +
 			fmt.Sprint(maxSessionMatches) + " newest matching jots (oldest first), and match_count is how many matched.",
@@ -293,6 +296,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	case "inbox":
 		var es []app.Entry
 		es, err = s.svc.Inbox(ctx, args.Limit)
+		s.svc.AddOpenURLs(es)
 		now := s.now()
 		aged := make([]agedEntry, 0, len(es))
 		for _, e := range es {
@@ -303,10 +307,14 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		if args.ID <= 0 {
 			return toolError("id is required and must be a positive integer"), nil
 		}
-		v, err = s.svc.Show(ctx, args.ID)
+		var e app.Entry
+		e, err = s.svc.Show(ctx, args.ID)
 		if errors.Is(err, app.ErrNotFound) {
 			return toolError(fmt.Sprintf("no jot #%d", args.ID)), nil
 		}
+		one := []app.Entry{e}
+		s.svc.AddOpenURLs(one)
+		v = one[0]
 	case "search":
 		var es []app.Entry
 		es, err = s.svc.Search(ctx, args.Query, args.Limit)
@@ -331,6 +339,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 				"match_count":    len(x.Matches),
 				"matches":        nonNil(x.Matches[max(0, len(x.Matches)-maxSessionMatches):]),
 				"resume_command": x.ResumeCommand(),
+				"open_url":       x.OpenURL,
 			})
 		}
 		total["sessions"], total["not_in_a_session"] = sessions, nonNil(loose)

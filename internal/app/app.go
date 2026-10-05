@@ -28,11 +28,13 @@ type Service struct {
 	store *store.Store
 	git   func(ctx context.Context, dir string) gitctx.Info
 	now   func() time.Time
+	// desktop finds Claude Desktop's session files, for open links.
+	desktop desktopLinks
 }
 
 // New wraps an open store.
 func New(st *store.Store) *Service {
-	return &Service{store: st, git: gitctx.Detect, now: time.Now}
+	return &Service{store: st, git: gitctx.Detect, now: time.Now, desktop: desktopLinks{dir: defaultDesktopDir()}}
 }
 
 // Open opens the database at path.
