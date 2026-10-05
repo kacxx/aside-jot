@@ -245,3 +245,14 @@ func TestOpenURLKeepsFirstHint(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// Without a sessions directory the transcript isn't read at all.
+func TestOpenURLNoDirSkipsTranscript(t *testing.T) {
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir("")
+	tr := filepath.Join(t.TempDir(), "missing.jsonl") // would fail to open if read
+	r := refFor([]Entry{jotMeta(t, svc, "claude", cliA, map[string]any{"transcript_path": tr})})
+	if got := svc.openURLs([]linkRef{r}); got[0] != "" {
+		t.Fatalf("got %q", got[0])
+	}
+}

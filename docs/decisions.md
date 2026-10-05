@@ -165,7 +165,7 @@ or at the first file modified before the oldest jot looked for (Desktop
 rewrites a file as the chat goes on, so it can't predate a jot in it). A miss
 is remembered for 10 minutes, and not at all for a jot captured in the last 10,
 since Desktop may not have written the file yet; a stored id is checked before
-the remembered misses. No cache, no schema change.
+the remembered misses. No persistent cache, no schema change.
 Ids are checked against a UUID (or `local_` UUID) shape before they go in a
 link.
 
