@@ -205,3 +205,14 @@ before the cut, and lists each session's 5 newest matching jots with a
 only you write jots, never the model. `inbox` entries carry `age_days`
 (calendar days since the jot, local time; 0 = today). Likewise there is no promote tool: only
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
+
+`inbox`, `show`, `search` and `find` also return `open_url`, a link to the chat a jot
+came from, for the agent to show you as a clickable link (the tools open
+nothing). It is set for Codex app threads (`codex://threads/<id>`) and for
+Claude Desktop sessions (`claude://code/continue?session=local_<id>`, which
+Desktop doesn't document). It is empty for everything else, including archived
+or deleted Desktop sessions, sessions started in the terminal, and
+`claude-desktop-3p`; use `find`'s `resume_command` there. The Desktop link is
+built on macOS only, from Desktop's session files; elsewhere it is empty.
+`aside show` prints the same link as `open:`. The Codex link is untested for
+threads started in the Codex CLI.
