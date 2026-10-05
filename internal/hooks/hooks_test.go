@@ -510,6 +510,8 @@ func TestClaudeOnCursorEventPassThrough(t *testing.T) {
 // Issue #23: a silent Claude hook made Cursor submit a jot that `aside hook
 // cursor` had blocked. On beforeSubmitPrompt it must block in Cursor format.
 func TestClaudeOnCursorEventBlocks(t *testing.T) {
+	t.Setenv(envHostSessionID, "local_7d6831ca-0cab-461d-8d71-d3f9f9aeaf3c")
+	t.Setenv(envEntrypoint, "claude-desktop")
 	repo := gitRepo(t)
 	open, path := tempDB(t)
 	_, o := runClaudeAsCursor(t, fixture(t, "cursor", "capture_single_root", map[string]any{"workspace_roots": []string{repo}}), open)
@@ -519,6 +521,12 @@ func TestClaudeOnCursorEventBlocks(t *testing.T) {
 	e := entries(t, path)[0]
 	if e.Source != "cursor" || e.SessionID != "e5b0a1c7-3d2f-4c8e-9a14-7f6d2b0c8e31" || e.Cwd != repo {
 		t.Fatalf("entry: %+v", e)
+	}
+	// A Cursor jot never records Claude Desktop's environment.
+	for _, k := range []string{store.MetaDesktopSession, store.MetaClaudeEntrypoint} {
+		if strings.Contains(string(e.Metadata), k) {
+			t.Fatalf("cursor jot has %s: %s", k, e.Metadata)
+		}
 	}
 }
 
