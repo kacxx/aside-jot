@@ -85,7 +85,7 @@ behaviour: [docs/setup.md](docs/setup.md).
 - **Afternoon.** The ticket note deserves an issue. Since you jotted it in
   Claude Code, `aside promote 21 --with-reply` shows you an issue with your jot
   and what the agent had just said when you jotted it, and creates it in that
-  repo when you say yes.
+  repo when you say yes. (`promote` always asks first.)
 - **Friday.** Someone asks about SUP-4821. `aside find SUP-4821` lists the
   chats where you jotted about it, with the command to reopen each one.
 
@@ -148,8 +148,9 @@ Only chats with a jot in them can be found, so start a ticket's chat with
 
 ```sh
 aside promote 12 --dry-run      # preview the repo, title and body; creates nothing
-aside promote 12                # create the issue with gh and mark the jot done
-aside promote 12 --with-reply   # include the agent's reply (Claude Code jots); asks before posting
+aside promote 12                # show the issue, ask [y/N], then create it with gh and mark the jot done
+aside promote 12 --yes          # skip the question (needed when stdin is not a terminal)
+aside promote 12 --with-reply   # include the agent's reply (Claude Code jots)
 ```
 
 The issue goes to the repo the jot was captured in, or `--repo owner/name`. It
@@ -166,8 +167,10 @@ Then ask the agent things like "what's in my inbox?" or "where did I work on
 SUP-4821?". The server is **read-only**: through it, agents can read and
 search your jots, but not add, change or close them. An agent that can run
 shell commands can still run `aside` itself: `aside done` when you ask it to
-close jots, or `aside promote`, which posts a jot to GitHub. Your agent's
-command approval is what guards that, and in auto-approve modes little or nothing does.
+close jots, or `aside promote`, which posts a jot to GitHub. `promote` asks
+first and refuses to run without a terminal, so an agent has to pass `--yes`,
+which shows in the command. Your agent's command approval is what guards that,
+and in auto-approve modes little or nothing does.
 
 ## All commands
 
@@ -180,7 +183,7 @@ command approval is what guards that, and in auto-approve modes little or nothin
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
 | `aside done <id>` | Mark a jot done |
-| `aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run]` | Turn a jot into a GitHub issue |
+| `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |
 | `aside backup <path>` | Copy the database safely; never overwrites |
 | `aside paths` | Where the data and binary are |
 | `aside version` | Print the version |
