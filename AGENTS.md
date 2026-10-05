@@ -96,7 +96,8 @@ records the results for the initial version.
 - **The MCP server is read-only by design.** Through it, agents can read jots
   but not create, edit or close them. That's all it guarantees: an agent with
   shell access can run `aside done` or `aside promote` (which publishes to
-  GitHub), guarded only by its command approval, which may be automatic. Don't
+  GitHub; it asks first at a terminal and needs `--yes` without one), guarded
+  only by its command approval, which may be automatic. Don't
   add write tools to the server, and don't claim more than this in docs.
 - **Hook paths are absolute.** Hook and MCP configs use the full path to the
   binary; `aside paths` warns when a bare `aside` would run something else.

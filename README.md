@@ -148,12 +148,15 @@ Only chats with a jot in them can be found, so start a ticket's chat with
 
 ```sh
 aside promote 12 --dry-run      # preview the repo, title and body; creates nothing
-aside promote 12                # create the issue with gh and mark the jot done
-aside promote 12 --with-reply   # include the agent's reply (Claude Code jots); asks before posting
+aside promote 12                # show the issue, ask [y/N], then create it and mark the jot done
+aside promote 12 --with-reply   # include the agent's reply (Claude Code jots)
+aside promote 12 --yes          # create it without asking
 ```
 
 The issue goes to the repo the jot was captured in, or `--repo owner/name`. It
-uses your existing `gh` login.
+uses your existing `gh` login. A jot is a private note and the repo may be
+public, so `promote` always shows the issue and asks first. Without a terminal
+it refuses unless you pass `--yes`.
 
 ### Let your agent read your notes
 
@@ -180,7 +183,7 @@ command approval is what guards that, and in auto-approve modes little or nothin
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
 | `aside done <id>` | Mark a jot done |
-| `aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run]` | Turn a jot into a GitHub issue |
+| `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue |
 | `aside backup <path>` | Copy the database safely; never overwrites |
 | `aside paths` | Where the data and binary are |
 | `aside version` | Print the version |

@@ -248,19 +248,19 @@ func TestPromoteCLI(t *testing.T) {
 	}
 
 	// The jot was added outside a repo, so the target must be given.
-	if _, err := aside("promote", "1"); err == nil || !strings.Contains(err.Error(), "pass --repo") {
+	if _, err := aside("promote", "1", "--yes"); err == nil || !strings.Contains(err.Error(), "pass --repo") {
 		t.Fatalf("no repo: %v", err)
 	}
-	if out, err := aside("promote", "--repo=o/n", "#1"); err != nil || out != "https://github.com/o/n/issues/7\n" {
+	if out, err := aside("promote", "--repo=o/n", "#1", "--yes"); err != nil || out != "https://github.com/o/n/issues/7\n" {
 		t.Fatalf("promote: %q, %v", out, err)
 	}
 	if out, _ := aside("show", "1"); !strings.Contains(out, "(done)") || !strings.Contains(out, "issue:     https://github.com/o/n/issues/7") {
 		t.Fatalf("show after promote: %q", out)
 	}
-	if _, err := aside("promote", "1", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "already promoted to https://github.com/o/n/issues/7") {
+	if _, err := aside("promote", "1", "--repo", "o/n", "--yes"); err == nil || !strings.Contains(err.Error(), "already promoted to https://github.com/o/n/issues/7") {
 		t.Fatalf("second promote: %v", err)
 	}
-	if _, err := aside("promote", "99", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
+	if _, err := aside("promote", "99", "--repo", "o/n", "--yes"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
 		t.Fatalf("unknown id: %v", err)
 	}
 	for _, args := range [][]string{{"promote"}, {"promote", "1", "2"}, {"promote", "1", "--bogus"}, {"promote", "1", "--repo"}} {
@@ -317,7 +317,9 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 	f := &ghFake{}
 	old := promoteRunner
 	promoteRunner = f
-	t.Cleanup(func() { promoteRunner = old })
+	oldTTY := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return true }
+	t.Cleanup(func() { promoteRunner = old; stdinIsTerminal = oldTTY })
 
 	transcript := filepath.Join(t.TempDir(), "t.jsonl")
 	rec := `{"type":"user","timestamp":"2020-01-01T00:00:00Z","message":{"role":"user","content":"hi"}}
@@ -376,5 +378,59 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 	if out, err := aside("", "promote", "2", "--repo", "o/n", "--with-reply", "--yes"); err != nil ||
 		strings.Contains(out, "[y/N]") || issues() != 2 {
 		t.Fatalf("--yes: %q, %v", out, err)
+	}
+}
+
+func TestPromoteAlwaysAsks(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	f := &ghFake{}
+	old, oldTTY := promoteRunner, stdinIsTerminal
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner, stdinIsTerminal = old, oldTTY })
+	issues := func() int {
+		n := 0
+		for _, c := range f.calls {
+			if strings.HasPrefix(c, "gh issue") {
+				n++
+			}
+		}
+		return n
+	}
+	aside := func(tty bool, stdin string, args ...string) (string, error) {
+		stdinIsTerminal = func(io.Reader) bool { return tty }
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(stdin), &out)
+		return out.String(), err
+	}
+	for _, text := range []string{"one", "two", "three"} {
+		if _, err := aside(true, "", "add", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Plain promote asks, with no --with-reply; "n" creates nothing.
+	if out, err := aside(true, "n\n", "promote", "1", "--repo", "o/n"); err == nil ||
+		!strings.Contains(out, "[y/N]") || !strings.Contains(out, "title: one") || issues() != 0 {
+		t.Fatalf("declined: %q, %v", out, err)
+	}
+	// No terminal and no --yes: refused before asking or running gh, even if "y" is piped.
+	before := len(f.calls)
+	if out, err := aside(false, "y\n", "promote", "1", "--repo", "o/n"); err == nil ||
+		!strings.Contains(err.Error(), "--yes") || strings.Contains(out, "[y/N]") || len(f.calls) != before {
+		t.Fatalf("no terminal: %q, %v, %v", out, err, f.calls)
+	}
+	// Confirmed at a terminal.
+	if out, err := aside(true, "y\n", "promote", "1", "--repo", "o/n"); err != nil ||
+		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") || issues() != 1 {
+		t.Fatalf("confirmed: %q, %v", out, err)
+	}
+	// --yes works without a terminal and doesn't ask.
+	if out, err := aside(false, "", "promote", "2", "--repo", "o/n", "--yes"); err != nil ||
+		strings.Contains(out, "[y/N]") || issues() != 2 {
+		t.Fatalf("--yes: %q, %v", out, err)
+	}
+	// --dry-run needs neither a terminal nor --yes.
+	if out, err := aside(false, "", "promote", "3", "--repo", "o/n", "--dry-run"); err != nil ||
+		!strings.Contains(out, "title: three") || issues() != 2 {
+		t.Fatalf("dry run: %q, %v", out, err)
 	}
 }

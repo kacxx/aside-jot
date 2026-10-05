@@ -31,6 +31,17 @@ var version = "" // set with -ldflags "-X main.version=..."
 // promoteRunner runs git and gh for aside promote; tests replace it.
 var promoteRunner app.Runner = app.ExecRunner{}
 
+// stdinIsTerminal reports whether r is an interactive terminal. Tests replace
+// it, because their stdin is a string reader.
+var stdinIsTerminal = func(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
 const usage = `aside — a side channel for thoughts while working with coding agents
 
 Usage:
@@ -42,7 +53,7 @@ Usage:
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
   aside done <id>            mark a jot as done
-  aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run]
+  aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
@@ -275,12 +286,12 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 	repo := fs.String("repo", "", "target repository, owner/name")
 	dryRun := fs.Bool("dry-run", false, "print the issue without creating it")
 	withReply := fs.Bool("with-reply", false, "include the agent's last reply before the jot (Claude Code only)")
-	yes := fs.Bool("yes", false, "with --with-reply, create the issue without asking first")
+	yes := fs.Bool("yes", false, "create the issue without asking first")
 	// Flags may come before or after the id.
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
-			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run])", err)
+			return fmt.Errorf("promote: %w (usage: aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run])", err)
 		}
 		if fs.NArg() == 0 {
 			break
@@ -290,12 +301,17 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 	}
 	id, err := parseID(pos)
 	if err != nil {
-		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--with-reply [--yes]] [--dry-run])", err)
+		return fmt.Errorf("%w (usage: aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run])", err)
 	}
 	req := app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun, WithReply: *withReply}
-	if *withReply && !*yes {
-		// The reply comes from a transcript that may hold secrets, so show
-		// exactly what would be posted and ask first.
+	if !*dryRun && !*yes {
+		// An issue may land in a public repo and can't be taken back, so show
+		// exactly what would be posted and ask first. Piped input doesn't
+		// count as asking: an agent has to pass --yes where its approval
+		// rules can see it.
+		if !stdinIsTerminal(stdin) {
+			return errors.New("promote: needs a terminal to ask first; pass --yes to create the issue without asking, or --dry-run to preview it")
+		}
 		req.Confirm = func(p app.Promotion) bool {
 			fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
 			answer, _ := bufio.NewReader(stdin).ReadString('\n')
