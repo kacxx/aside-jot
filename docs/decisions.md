@@ -91,9 +91,12 @@ modes that approval is a classifier or nothing at all.
 
 `promote` is the riskier of the two. A closed jot stays in the database and
 in `aside search`; a promoted one is a GitHub issue, possibly in a public
-repo. Plain `promote` doesn't ask first (only `--with-reply` does, and `--yes`
-skips that), and because aside runs `gh` itself, an approval rule that allows
-`aside` but gates `gh` doesn't catch it.
+repo. Because aside runs `gh` itself, an approval rule that allows `aside` but gates
+`gh` doesn't catch it. So `promote` always shows the issue and asks first,
+refuses to ask without a terminal, and takes `--yes` to skip the question
+([#45](https://github.com/kacxx/aside-jot/issues/45)). That stops accidental
+publishing and makes the risky form visible in the command; an agent that
+passes `--yes` deliberately is still guarded only by command approval.
 
 **Why:** in real use (5 Oct 2026), a Claude Code agent was asked to close
 finished jots, found the MCP tools couldn't, and ran `aside done` from the
