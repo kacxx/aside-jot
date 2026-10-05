@@ -49,9 +49,10 @@ type PromoteRequest struct {
 	// WithReply adds the agent's last reply before the jot to the body.
 	WithReply bool
 	// Confirm, if set, is shown the issue just before it is created; the
-	// issue is created only if it returns true. It is not called on a dry
-	// run.
-	Confirm func(Promotion) bool
+	// issue is created only if it returns nil. Return ErrNotConfirmed to
+	// decline; any other error is returned as is. It is not called on a dry
+	// run, and runs after the jot, repo and gh login have been checked.
+	Confirm func(Promotion) error
 }
 
 // ErrNotConfirmed is returned when Confirm declines the issue.
@@ -128,8 +129,10 @@ func (s *Service) Promote(ctx context.Context, r Runner, req PromoteRequest) (Pr
 		}
 		return Promotion{}, fmt.Errorf("gh is not logged in to %s; run 'gh auth login' (%w)", host, err)
 	}
-	if req.Confirm != nil && !req.Confirm(p) {
-		return Promotion{}, ErrNotConfirmed
+	if req.Confirm != nil {
+		if err := req.Confirm(p); err != nil {
+			return Promotion{}, err
+		}
 	}
 	out, err := r.Run(ctx, strings.NewReader(p.Body), "gh", "issue", "create",
 		"--repo="+p.Repo, "--title="+p.Title, "--body-file=-")

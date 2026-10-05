@@ -79,11 +79,25 @@ GitHub issue, as a deliberate step after capture:
 
 ```sh
 aside promote 12 --dry-run   # print the target repo, title and body; creates nothing
-aside promote 12             # create the issue and print its URL
+aside promote 12             # show the issue, ask [y/N], then create it and print its URL
+aside promote 12 --yes       # create it without asking
 aside promote 12 --repo kacxx/aside-jot
 aside promote 12 --with-reply --dry-run   # preview the body with the agent's reply
 ```
 
+- **Always confirms.** Without `--dry-run`, aside shows the repo, title and
+  full body and asks `[y/N]` before creating anything, and creates exactly
+  what it showed. The preview and the question go to stderr, so stdout holds
+  only the issue URL (`url=$(aside promote 12 --yes)` works). `--yes` skips
+  the question. If stdin is not a terminal and `--yes` isn't passed,
+  `promote` exits non-zero and creates nothing, so a plain pipe
+  (`echo y | aside promote 12`) can't answer; an agent has to pass `--yes`,
+  which is visible in the command. The jot, its repo and your `gh` login are
+  checked first, so a bad id or an already-promoted jot gets its own error.
+  This only covers a plain pipe: a process that runs commands in a
+  pseudo-terminal, or under `script`, can still type "y" (not checked for any
+  particular agent), and an agent that passes `--yes` on purpose still relies
+  on command approval.
 - The issue is created with the [GitHub CLI](https://cli.github.com)
   (`gh issue create`) under your existing `gh` login. aside stores no tokens;
   run `gh auth login` first.
@@ -103,9 +117,8 @@ aside promote 12 --with-reply --dry-run   # preview the body with the agent's re
   a local command such as `/model`, a `!` command the agent doesn't answer, or
   compacting the conversation does not start a new turn, so jotting right
   after any of them still picks up the reply before it. Transcripts can
-  hold secrets and internal paths, so without `--dry-run` aside shows the full
-  body and asks `[y/N]` before creating anything, and creates exactly the body
-  it showed; `--yes` skips the question. The reply is posted as written, so an
+  hold secrets and internal paths, so check the body when asked to confirm.
+  The reply is posted as written, so an
   `@name` in it notifies that GitHub user and a `#123` links to that issue. A
   missing or unreadable transcript, or no reply before the jot, is an error; no
   issue is created without it. A warning for public repos is not implemented

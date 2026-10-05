@@ -91,9 +91,8 @@ modes that approval is a classifier or nothing at all.
 
 `promote` is the riskier of the two. A closed jot stays in the database and
 in `aside search`; a promoted one is a GitHub issue, possibly in a public
-repo. Plain `promote` doesn't ask first (only `--with-reply` does, and `--yes`
-skips that), and because aside runs `gh` itself, an approval rule that allows
-`aside` but gates `gh` doesn't catch it.
+repo. Because aside runs `gh` itself, an approval rule that allows `aside` but
+gates `gh` doesn't catch it.
 
 **Why:** in real use (5 Oct 2026), a Claude Code agent was asked to close
 finished jots, found the MCP tools couldn't, and ran `aside done` from the
@@ -109,9 +108,17 @@ workflow, make the CLI path easy to find and fast
 ([#43](https://github.com/kacxx/aside-jot/issues/43)) instead of pretending
 it doesn't exist.
 
+**Update ([#45](https://github.com/kacxx/aside-jot/issues/45)):** `promote`
+now always shows the issue and asks `[y/N]`, and refuses to run when stdin is
+not a terminal unless `--yes` is passed (`--dry-run` is unchanged). A plain pipe
+can't answer, so an agent has to pass `--yes`, which the user or their approval
+rules can see in the command. This stops accidental publishing, and only
+covers a plain pipe: a pseudo-terminal (an agent shell that allocates one, or
+`script`) can still answer the question, and an agent that deliberately passes
+`--yes` still relies on command approval. The question goes to stderr so
+`$(aside promote 12 --yes)` and pipes keep stdout clean.
+
 **Revisit if:** jots are changed or promoted in ways users didn't ask for.
-Then consider a confirmation the agent can't answer, such as one that needs a
-terminal; a y/n prompt doesn't count, since an agent can pipe in "y".
 
 ## Find and sessions shipped as a thin slice
 

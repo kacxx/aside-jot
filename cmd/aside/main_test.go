@@ -221,15 +221,58 @@ func (f *ghFake) Run(_ context.Context, _ io.Reader, name string, args ...string
 	return nil, nil
 }
 
+// setTerminal makes promote treat stdin as a terminal (or not) for the test.
+func setTerminal(t *testing.T, isTerminal bool) {
+	t.Helper()
+	old := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return isTerminal }
+	t.Cleanup(func() { stdinIsTerminal = old })
+}
+
+// capturePrompt collects what promote writes to promptOut.
+func capturePrompt(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := promptOut
+	promptOut = &buf
+	t.Cleanup(func() { promptOut = old })
+	return &buf
+}
+
+func TestStdinIsTerminalReal(t *testing.T) {
+	if stdinIsTerminal(strings.NewReader("y\n")) {
+		t.Error("a strings.Reader is not a terminal")
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pr.Close()
+	defer pw.Close()
+	if stdinIsTerminal(pr) {
+		t.Error("a pipe is not a terminal")
+	}
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	if stdinIsTerminal(null) {
+		t.Error("/dev/null is not a terminal")
+	}
+}
+
 func TestPromoteCLI(t *testing.T) {
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	setTerminal(t, true)
+	prompt := capturePrompt(t)
 	f := &ghFake{}
 	old := promoteRunner
 	promoteRunner = f
 	t.Cleanup(func() { promoteRunner = old })
 	aside := func(args ...string) (string, error) {
 		var out bytes.Buffer
-		err := run(args, nil, &out)
+		err := run(args, strings.NewReader("y\n"), &out)
 		return out.String(), err
 	}
 
@@ -253,6 +296,9 @@ func TestPromoteCLI(t *testing.T) {
 	}
 	if out, err := aside("promote", "--repo=o/n", "#1"); err != nil || out != "https://github.com/o/n/issues/7\n" {
 		t.Fatalf("promote: %q, %v", out, err)
+	}
+	if !strings.Contains(prompt.String(), "title: ship it") || !strings.HasSuffix(prompt.String(), "[y/N] ") {
+		t.Fatalf("prompt: %q", prompt.String())
 	}
 	if out, _ := aside("show", "1"); !strings.Contains(out, "(done)") || !strings.Contains(out, "issue:     https://github.com/o/n/issues/7") {
 		t.Fatalf("show after promote: %q", out)
@@ -314,6 +360,8 @@ func TestInboxShowsAge(t *testing.T) {
 func TestPromoteWithReplyCLI(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	setTerminal(t, true)
+	prompt := capturePrompt(t)
 	f := &ghFake{}
 	old := promoteRunner
 	promoteRunner = f
@@ -354,27 +402,107 @@ func TestPromoteWithReplyCLI(t *testing.T) {
 	}
 	// Declined (or no answer): the preview is shown and nothing is created.
 	for _, answer := range []string{"", "n\n"} {
+		prompt.Reset()
 		out, err := aside(answer, "promote", "1", "--repo", "o/n", "--with-reply")
-		if err == nil || !strings.Contains(out, "the diagnosis") || !strings.Contains(out, "[y/N]") {
-			t.Fatalf("declined %q: %q, %v", answer, out, err)
+		if err == nil || out != "" || !strings.Contains(prompt.String(), "the diagnosis") || !strings.Contains(prompt.String(), "[y/N]") {
+			t.Fatalf("declined %q: %q, %q, %v", answer, out, prompt.String(), err)
 		}
 	}
 	if issues() != 0 {
 		t.Fatalf("declined promote ran %v", f.calls)
 	}
 	// A dry run prints the body without asking.
+	prompt.Reset()
 	if out, err := aside("", "promote", "1", "--repo", "o/n", "--with-reply", "--dry-run"); err != nil ||
-		!strings.Contains(out, "the diagnosis") || strings.Contains(out, "[y/N]") || issues() != 0 {
+		!strings.Contains(out, "the diagnosis") || prompt.Len() != 0 || issues() != 0 {
 		t.Fatalf("dry run: %q, %v", out, err)
 	}
 	// Confirmed.
 	if out, err := aside("y\n", "promote", "1", "--repo", "o/n", "--with-reply"); err != nil ||
-		!strings.HasSuffix(out, "https://github.com/o/n/issues/7\n") || issues() != 1 {
+		out != "https://github.com/o/n/issues/7\n" || issues() != 1 {
 		t.Fatalf("confirmed: %q, %v", out, err)
 	}
 	// --yes creates without asking or reading stdin.
+	prompt.Reset()
 	if out, err := aside("", "promote", "2", "--repo", "o/n", "--with-reply", "--yes"); err != nil ||
-		strings.Contains(out, "[y/N]") || issues() != 2 {
+		prompt.Len() != 0 || issues() != 2 {
 		t.Fatalf("--yes: %q, %v", out, err)
+	}
+}
+
+func TestPromoteConfirmCLI(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	prompt := capturePrompt(t)
+	f := &ghFake{}
+	old := promoteRunner
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner = old })
+	aside := func(stdin string, args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(stdin), &out)
+		return out.String(), err
+	}
+	issues := func() int {
+		n := 0
+		for _, c := range f.calls {
+			if strings.HasPrefix(c, "gh issue") {
+				n++
+			}
+		}
+		return n
+	}
+	for _, text := range []string{"one", "two", "three", "four"} {
+		if _, err := aside("", "add", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// No terminal and no --yes: refused, even with "y" piped in, and nothing
+	// is asked or created.
+	setTerminal(t, false)
+	if out, err := aside("y\n", "promote", "1", "--repo", "o/n"); err == nil ||
+		!strings.Contains(err.Error(), "not a terminal") || out != "" || prompt.Len() != 0 || issues() != 0 {
+		t.Fatalf("no terminal: %q, %v, %v", out, err, f.calls)
+	}
+	// A bad id still gets its own error, not the terminal one.
+	if _, err := aside("y\n", "promote", "99", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
+		t.Fatalf("unknown id without a terminal: %v", err)
+	}
+	// A dry run needs no answer, so it works without a terminal.
+	if out, err := aside("", "promote", "1", "--repo", "o/n", "--dry-run"); err != nil ||
+		!strings.Contains(out, "title: one") || prompt.Len() != 0 || issues() != 0 {
+		t.Fatalf("dry run: %q, %v", out, err)
+	}
+	// --yes works without a terminal and does not ask.
+	if out, err := aside("", "promote", "2", "--repo", "o/n", "--yes"); err != nil ||
+		out != "https://github.com/o/n/issues/7\n" || prompt.Len() != 0 || issues() != 1 {
+		t.Fatalf("--yes: %q, %v", out, err)
+	}
+	// An already-promoted jot reports its URL, not the terminal error.
+	if _, err := aside("y\n", "promote", "2", "--repo", "o/n"); err == nil || !strings.Contains(err.Error(), "already promoted to") {
+		t.Fatalf("already promoted without a terminal: %v", err)
+	}
+
+	// With a terminal, plain promote shows the issue on stderr and asks.
+	setTerminal(t, true)
+	for _, answer := range []string{"", "n\n"} {
+		prompt.Reset()
+		out, err := aside(answer, "promote", "1", "--repo", "o/n")
+		if err == nil || out != "" || !strings.Contains(prompt.String(), "repo:  o/n\ntitle: one") || !strings.HasSuffix(prompt.String(), "[y/N] ") {
+			t.Fatalf("declined %q: %q, %q, %v", answer, out, prompt.String(), err)
+		}
+	}
+	if issues() != 1 {
+		t.Fatalf("declined promote ran %v", f.calls)
+	}
+	if out, err := aside("y\n", "promote", "1", "--repo", "o/n"); err != nil ||
+		out != "https://github.com/o/n/issues/7\n" || issues() != 2 {
+		t.Fatalf("confirmed: %q, %v", out, err)
+	}
+	// --yes skips the question on a terminal too.
+	prompt.Reset()
+	if out, err := aside("", "promote", "3", "--repo", "o/n", "--yes"); err != nil ||
+		out != "https://github.com/o/n/issues/7\n" || prompt.Len() != 0 || issues() != 3 {
+		t.Fatalf("--yes on a terminal: %q, %v", out, err)
 	}
 }
