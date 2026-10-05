@@ -32,9 +32,15 @@ var version = "" // set with -ldflags "-X main.version=..."
 // promoteRunner runs git and gh for aside promote; tests replace it.
 var promoteRunner app.Runner = app.ExecRunner{}
 
-// stdinIsTerminal reports whether r is an interactive terminal. promote
-// asks for confirmation only there, so an agent can't answer by piping in "y".
+// promptOut is where promote shows the issue and asks, so stdout carries only
+// the URL (`url=$(aside promote 12 --yes)`, `aside promote 12 | pbcopy`).
 // Tests replace it.
+var promptOut io.Writer = os.Stderr
+
+// stdinIsTerminal reports whether r is an interactive terminal. promote asks
+// for confirmation only there, so a plain pipe ("echo y | aside promote 12")
+// can't answer. A pseudo-terminal still can: a process that runs commands
+// in one, or under script(1), can type "y". Tests replace it.
 var stdinIsTerminal = func(r io.Reader) bool {
 	f, ok := r.(*os.File)
 	return ok && (isatty.IsTerminal(f.Fd()) || isatty.IsCygwinTerminal(f.Fd()))
@@ -304,16 +310,20 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 	req := app.PromoteRequest{ID: id, Repo: *repo, DryRun: *dryRun, WithReply: *withReply}
 	if !*yes && !*dryRun {
 		// A jot is a private note and the target repo may be public, so always
-		// show what would be posted and ask. Without a terminal there is no one
-		// to ask, and reading an answer from a pipe would let an agent say "y".
-		if !stdinIsTerminal(stdin) {
-			return errors.New("promote posts to GitHub and asks first, but stdin is not a terminal; run it in a terminal, or pass --yes to skip the question")
-		}
-		req.Confirm = func(p app.Promotion) bool {
-			fmt.Fprintf(w, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
+		// show what would be posted and ask. The terminal check is inside
+		// Confirm, after Promote has found the jot and its repo, so a bad id
+		// or an already-promoted jot gets its own error. Without a terminal
+		// there is no one to ask, and an answer read from a pipe isn't one.
+		req.Confirm = func(p app.Promotion) error {
+			if !stdinIsTerminal(stdin) {
+				return errors.New("promote posts to GitHub and asks first, but stdin is not a terminal; run it in a terminal, or pass --yes to skip the question")
+			}
+			fmt.Fprintf(promptOut, "repo:  %s\ntitle: %s\n\n%s\nCreate this issue? [y/N] ", p.Repo, p.Title, p.Body)
 			answer, _ := bufio.NewReader(stdin).ReadString('\n')
-			a := strings.ToLower(strings.TrimSpace(answer))
-			return a == "y" || a == "yes"
+			if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
+				return app.ErrNotConfirmed
+			}
+			return nil
 		}
 	}
 	p, err := svc.Promote(ctx, promoteRunner, req)

@@ -87,11 +87,17 @@ aside promote 12 --with-reply --dry-run   # preview the body with the agent's re
 
 - **Always confirms.** Without `--dry-run`, aside shows the repo, title and
   full body and asks `[y/N]` before creating anything, and creates exactly
-  what it showed. `--yes` skips the question. If stdin is not a terminal and
-  `--yes` isn't passed, `promote` exits non-zero and creates nothing, so
-  piping in "y" doesn't work; an agent has to pass `--yes`, which is visible
-  in the command. That stops accidental publishing, not an agent that passes
-  `--yes` on purpose; that still relies on command approval.
+  what it showed. The preview and the question go to stderr, so stdout holds
+  only the issue URL (`url=$(aside promote 12 --yes)` works). `--yes` skips
+  the question. If stdin is not a terminal and `--yes` isn't passed,
+  `promote` exits non-zero and creates nothing, so a plain pipe
+  (`echo y | aside promote 12`) can't answer; an agent has to pass `--yes`,
+  which is visible in the command. The jot, its repo and your `gh` login are
+  checked first, so a bad id or an already-promoted jot gets its own error.
+  This only covers a plain pipe: a process that runs commands in a
+  pseudo-terminal, or under `script`, can still type "y" (not checked for any
+  particular agent), and an agent that passes `--yes` on purpose still relies
+  on command approval.
 - The issue is created with the [GitHub CLI](https://cli.github.com)
   (`gh issue create`) under your existing `gh` login. aside stores no tokens;
   run `gh auth login` first.
