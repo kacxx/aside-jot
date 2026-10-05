@@ -93,6 +93,15 @@ type Entry struct {
 // MetaIssueURL is the metadata key holding a promoted jot's issue URL.
 const MetaIssueURL = "issue_url"
 
+// Metadata keys a Claude Code capture may record. MetaDesktopSession is
+// Claude Desktop's own session id (local_<uuid>); it is a hint, so check it
+// against Desktop's session file before relying on it.
+const (
+	MetaTranscriptPath   = "transcript_path"
+	MetaDesktopSession   = "claude_desktop_session_id"
+	MetaClaudeEntrypoint = "claude_entrypoint"
+)
+
 // Store is a handle on the jot database.
 type Store struct {
 	db *sql.DB

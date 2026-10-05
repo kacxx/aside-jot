@@ -85,6 +85,14 @@ records the results for the initial version.
   if the agent changed directory. `sessions.go` reads the first `cwd` in the
   Claude transcript (`transcript_path` in the jot's metadata). Codex resumes
   from any directory, so its resume command has no `cd`.
+- **Claude Desktop's session id is a hint.** Desktop sets
+  `CLAUDE_CODE_HOST_SESSION_ID` (`local_<uuid>`) and `CLAUDE_CODE_ENTRYPOINT`
+  on each session's Claude Code process; the hook stores them as
+  `claude_desktop_session_id` and `claude_entrypoint` when well-formed. Both
+  are undocumented, and a terminal `claude` started inside a Desktop session
+  may inherit them, so check the id against Desktop's session file
+  (`cliSessionId`) before building a link from it
+  ([#44](https://github.com/kacxx/aside-jot/issues/44)).
 - **The MCP server is read-only by design.** Through it, agents can read jots
   but not create, edit or close them. That's all it guarantees: an agent with
   shell access can run `aside done` or `aside promote` (which publishes to
