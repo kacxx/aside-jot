@@ -161,12 +161,13 @@ func refFor(es []Entry) linkRef {
 func (s *Service) openURLs(refs []linkRef) []string {
 	out := make([]string, len(refs))
 	wants := map[string]want{}
+	hasDir := s.desktop.hasDir() // no transcript is read where there are no session files
 	for i, r := range refs {
 		switch {
 		case !uuidShape.MatchString(r.sessionID):
 		case r.source == "codex":
 			out[i] = "codex://threads/" + url.PathEscape(r.sessionID)
-		case r.source == "claude" && claudeEntrypoint(r) == desktopEntrypoint:
+		case r.source == "claude" && hasDir && claudeEntrypoint(r) == desktopEntrypoint:
 			w := wants[r.sessionID]
 			if w.hint == "" {
 				w.hint = r.desktopHint
@@ -218,6 +219,12 @@ func transcriptEntrypoint(path string) string {
 		}
 	}
 	return ""
+}
+
+func (d *desktopLinks) hasDir() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.dir != ""
 }
 
 func (d *desktopLinks) clock() time.Time {
