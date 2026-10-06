@@ -101,7 +101,7 @@ func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error
 		whole := regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])` + regexp.QuoteMeta(q) + `(?:[^A-Za-z0-9]|$)`)
 		kept := matches[:0]
 		for _, e := range matches {
-			if whole.MatchString(e.Text) {
+			if whole.MatchString(e.Text) || whole.MatchString(e.DoneNote) {
 				kept = append(kept, e)
 			}
 		}

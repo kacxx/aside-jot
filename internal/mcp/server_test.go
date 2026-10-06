@@ -487,3 +487,43 @@ func TestOpenURLInTools(t *testing.T) {
 		t.Errorf("off macOS want open_url and no open command: %s", got)
 	}
 }
+
+func TestDescriptionsPointToDone(t *testing.T) {
+	srv := &Server{exe: "/Users/me/go/bin/aside"}
+	for _, tl := range srv.toolList() {
+		name := tl["name"].(string)
+		if name != "inbox" && name != "show" {
+			continue
+		}
+		if d := tl["description"].(string); !strings.Contains(d, `/Users/me/go/bin/aside done <id>... [--note "why"]`) || strings.Contains(d, "{{") {
+			t.Errorf("%s description does not give the full-path aside done command: %s", name, d)
+		}
+	}
+	srv.exe = ""
+	if d := srv.toolList()[0]["description"].(string); !strings.Contains(d, "`aside done <id>...") {
+		t.Errorf("without a known path the command is bare aside: %s", d)
+	}
+}
+
+func TestShowReturnsDoneNote(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "x", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.DoneAll(ctx, []int64{1}, "moved to ESM-6392"); err != nil {
+		t.Fatal(err)
+	}
+	res, rerr := NewServer(svc, "test").callTool(ctx, "show", json.RawMessage(`{"id":1}`))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	text := res.(map[string]any)["content"].([]map[string]any)[0]["text"].(string)
+	if !strings.Contains(text, `"done_note": "moved to ESM-6392"`) && !strings.Contains(text, `"done_note":"moved to ESM-6392"`) {
+		t.Fatalf("show: %s", text)
+	}
+}

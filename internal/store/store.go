@@ -88,6 +88,9 @@ type Entry struct {
 	// IssueURL is metadata's issue_url, set when the jot was promoted to an
 	// issue. It is read from metadata, never written by Insert.
 	IssueURL string `json:"issue_url,omitempty"`
+	// DoneNote is metadata's done_note, the reason the jot was closed. Like
+	// IssueURL it is read from metadata, never written by Insert.
+	DoneNote string `json:"done_note,omitempty"`
 	// OpenURL links to the jot's source chat. It is never stored; the app
 	// layer fills it in for the entries it returns on request.
 	OpenURL string `json:"open_url,omitempty"`
@@ -99,6 +102,12 @@ type Entry struct {
 
 // MetaIssueURL is the metadata key holding a promoted jot's issue URL.
 const MetaIssueURL = "issue_url"
+
+// Metadata keys written by aside done: why the jot was closed, and when.
+const (
+	MetaDoneNote = "done_note"
+	MetaDoneAt   = "done_at"
+)
 
 // Metadata keys a Claude Code capture may record. MetaDesktopSession is
 // Claude Desktop's own session id (local_<uuid>); it is a hint, so check it
@@ -364,11 +373,14 @@ func (s *Store) BySessions(ctx context.Context, ids []string) ([]Entry, error) {
 	return scan(rows)
 }
 
-// Search returns the newest entries whose text contains q (case-insensitive
-// for ASCII). LIKE wildcards in q are matched literally.
+// Search returns the newest entries whose text or done note contains q
+// (case-insensitive for ASCII). LIKE wildcards in q are matched literally.
 func (s *Store) Search(ctx context.Context, q string, limit int) ([]Entry, error) {
+	pat := "%" + EscapeLike(q) + "%"
 	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entries
-		WHERE text LIKE ? ESCAPE '\' ORDER BY id DESC LIMIT ?`, "%"+EscapeLike(q)+"%", limitOrAll(limit))
+		WHERE text LIKE ? ESCAPE '\'
+		   OR json_extract(metadata, '$.done_note') LIKE ? ESCAPE '\'
+		ORDER BY id DESC LIMIT ?`, pat, pat, limitOrAll(limit))
 	if err != nil {
 		return nil, err
 	}
@@ -418,6 +430,9 @@ func (s *Store) SetMetadata(ctx context.Context, id int64, key string, value any
 		return fmt.Errorf("entry %d: metadata is not a JSON object", id)
 	}
 	meta[key] = v
+	if status == StatusDone && cur != StatusDone {
+		meta[MetaDoneAt] = json.RawMessage(strconv.Quote(time.Now().UTC().Format(timeLayout)))
+	}
 	b, err := json.Marshal(meta)
 	if err != nil {
 		return err
@@ -430,6 +445,92 @@ func (s *Store) SetMetadata(ctx context.Context, id int64, key string, value any
 		return err
 	}
 	return tx.Commit()
+}
+
+// MissingError is returned by Done when some ids do not exist. It matches
+// ErrNotFound.
+type MissingError struct{ IDs []int64 }
+
+func (e *MissingError) Error() string {
+	parts := make([]string, len(e.IDs))
+	for i, id := range e.IDs {
+		parts[i] = fmt.Sprintf("#%d", id)
+	}
+	if len(parts) == 1 {
+		return "no jot " + parts[0]
+	}
+	return "no jots " + strings.Join(parts, ", ")
+}
+
+func (e *MissingError) Is(target error) bool { return target == ErrNotFound }
+
+// Done marks every entry in ids done in one transaction. If any id does not
+// exist it returns a *MissingError naming all of them and changes nothing.
+// A non-empty note is stored as metadata done_note, replacing an earlier one;
+// done_at is set when the entry was not already done. Closing a done entry
+// without a note changes nothing. The result holds the ids that were changed.
+func (s *Store) Done(ctx context.Context, ids []int64, note string, now time.Time) (map[int64]bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	type row struct {
+		meta map[string]json.RawMessage
+		done bool
+	}
+	rows := make(map[int64]row, len(ids))
+	var missing []int64
+	for _, id := range ids {
+		if _, seen := rows[id]; seen {
+			continue
+		}
+		var raw, status string
+		err := tx.QueryRowContext(ctx, `SELECT metadata, status FROM entries WHERE id = ?`, id).Scan(&raw, &status)
+		if errors.Is(err, sql.ErrNoRows) {
+			missing = append(missing, id)
+			rows[id] = row{}
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		meta := map[string]json.RawMessage{}
+		if err := json.Unmarshal([]byte(raw), &meta); err != nil || meta == nil {
+			return nil, fmt.Errorf("entry %d: metadata is not a JSON object", id)
+		}
+		rows[id] = row{meta: meta, done: status == StatusDone}
+	}
+	if len(missing) > 0 {
+		return nil, &MissingError{IDs: missing}
+	}
+	changed := make(map[int64]bool, len(rows))
+	for id, r := range rows {
+		if r.done && note == "" {
+			continue
+		}
+		changed[id] = true
+		if note != "" {
+			v, _ := json.Marshal(note)
+			r.meta[MetaDoneNote] = v
+		}
+		if !r.done {
+			v, _ := json.Marshal(now.UTC().Format(timeLayout))
+			r.meta[MetaDoneAt] = v
+		}
+		b, err := json.Marshal(r.meta)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE entries SET metadata = ?, status = ? WHERE id = ?`,
+			string(b), StatusDone, id); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return changed, nil
 }
 
 // Backup writes a consistent copy of the database to dst using VACUUM INTO.
@@ -500,6 +601,7 @@ func scan(rows *sql.Rows) ([]Entry, error) {
 			var m map[string]any
 			if json.Unmarshal(e.Metadata, &m) == nil {
 				e.IssueURL, _ = m[MetaIssueURL].(string)
+				e.DoneNote, _ = m[MetaDoneNote].(string)
 			}
 		}
 		out = append(out, e)
