@@ -216,6 +216,12 @@ settings.
 command an agent with shell access can run, guarded only by its command
 approval, like `aside done`. It changes no jot and only focuses a chat.
 
+**Per session:** the link belongs to the chat, not the jot. It is built from what
+all of the session's jots record, so a jot without the Desktop id (one from
+before it was stored) still opens its session's chat, and `find` can name any
+jot of a session in its command. `find` looks links up only for the sessions it
+shows, after the limit is applied.
+
 **Full path:** agents run it from a shell that may not have aside on its `PATH`
 (on one Mac, `~/go/bin` was on neither a login nor a non-interactive shell's), so
 the MCP tools return `open_command` with the full path to aside, from

@@ -132,6 +132,32 @@ func TestOpenCLIDesktop(t *testing.T) {
 	if err := run([]string{"open", "2"}, strings.NewReader(""), &out); err == nil || !strings.Contains(err.Error(), "no link") || len(opened) != 1 {
 		t.Fatalf("archived: %v opened=%v", err, opened)
 	}
+
+	// A later jot in the Desktop session has no metadata of its own; the
+	// session's link still opens from it, and find prints the command for it.
+	svc, err = app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(context.Background(), app.CaptureRequest{Text: "later desktop jot", Source: "claude", SessionID: cli}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Close()
+	out.Reset()
+	if err := run([]string{"open", "3"}, strings.NewReader(""), &out); err != nil || len(opened) != 2 || opened[1] != want {
+		t.Fatalf("later jot: err=%v opened=%v", err, opened)
+	}
+	out.Reset()
+	if err := run([]string{"find", "desktop jot"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\n  aside open 3\n") {
+		t.Fatalf("find output has no open command for the newest jot:\n%s", out.String())
+	}
+	out.Reset()
+	if err := run([]string{"sessions"}, strings.NewReader(""), &out); err != nil || strings.Contains(out.String(), "aside open") {
+		t.Fatalf("sessions should not print open commands: err=%v\n%s", err, out.String())
+	}
 }
 
 // A failing open reports what it printed.

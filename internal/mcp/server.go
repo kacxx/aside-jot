@@ -47,7 +47,8 @@ type Reader interface {
 	Show(ctx context.Context, id int64) (app.Entry, error)
 	Search(ctx context.Context, q string, n int) ([]app.Entry, error)
 	Find(ctx context.Context, q string) ([]app.Session, []app.Entry, error)
-	AddOpenURLs(es []app.Entry)
+	AddOpenURLs(ctx context.Context, es []app.Entry)
+	AddSessionOpenURLs(ss []app.Session)
 }
 
 // Server serves MCP requests against a Reader.
@@ -71,7 +72,7 @@ func NewServer(svc Reader, version string) *Server {
 // withCommands sets OpenCommand on the entries that have an OpenURL.
 func (s *Server) withCommands(es []app.Entry) {
 	for i := range es {
-		if es[i].OpenURL != "" && s.exe != "" {
+		if app.OpenableURL(es[i].OpenURL) && s.exe != "" {
 			es[i].OpenCommand = app.OpenCommand(s.exe, es[i].ID)
 		}
 	}
@@ -322,7 +323,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	case "inbox":
 		var es []app.Entry
 		es, err = s.svc.Inbox(ctx, args.Limit)
-		s.svc.AddOpenURLs(es)
+		s.svc.AddOpenURLs(ctx, es)
 		s.withCommands(es)
 		now := s.now()
 		aged := make([]agedEntry, 0, len(es))
@@ -340,13 +341,13 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 			return toolError(fmt.Sprintf("no jot #%d", args.ID)), nil
 		}
 		one := []app.Entry{e}
-		s.svc.AddOpenURLs(one)
+		s.svc.AddOpenURLs(ctx, one)
 		s.withCommands(one)
 		v = one[0]
 	case "search":
 		var es []app.Entry
 		es, err = s.svc.Search(ctx, args.Query, args.Limit)
-		s.svc.AddOpenURLs(es)
+		s.svc.AddOpenURLs(ctx, es)
 		s.withCommands(es)
 		v = map[string]any{"entries": nonNil(es)}
 	case "find":
@@ -355,6 +356,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		ss, loose, err = s.svc.Find(ctx, args.Query)
 		total := map[string]any{"total_sessions": len(ss), "total_not_in_a_session": len(loose)}
 		ss, loose = ss[:min(len(ss), args.Limit)], loose[:min(len(loose), args.Limit)]
+		s.svc.AddSessionOpenURLs(ss)
 		sessions := []map[string]any{}
 		for _, x := range ss {
 			latest := x.Latest()
@@ -394,7 +396,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 // sessionOpenCommand is the command that opens the session's chat, via its
 // newest jot, or "" if the session has no link.
 func (s *Server) sessionOpenCommand(x app.Session) string {
-	if x.OpenURL == "" || s.exe == "" {
+	if !app.OpenableURL(x.OpenURL) || s.exe == "" {
 		return ""
 	}
 	return app.OpenCommand(s.exe, x.Latest().ID)
