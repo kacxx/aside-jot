@@ -81,12 +81,16 @@ agents.
   whitespace can change (the file is rewritten with two-space indentation).
   An aside hook already there, including an old `jot hook claude` or
   `jot hook codex` one, is updated, not duplicated, and any extra aside entries
-  are removed so only one hook runs. Running it again with the same binary
+  are removed so only one hook runs. An entry that runs this very binary
+  (same path, or the same file through a link) counts as aside's even if the
+  binary has another name, such as `aside-dev`; an entry for a different build
+  under another name isn't recognised, and stays. Running it again with the same binary
   changes nothing.
 - **Backup.** A changed file is copied to `<file>.bak-<yyyymmdd-hhmmss>` first.
   A file that isn't valid JSON is left alone and named in the error.
-- **`--dry-run`** prints what would change and the resulting file, and writes
-  nothing.
+- **`--dry-run`** prints what would change and the resulting
+  `hooks.UserPromptSubmit` section, and writes nothing. It doesn't print the
+  rest of the file, which can hold `env` values and tokens.
 - **`--mcp`** prints the matching `claude mcp add` or `codex mcp add` command
   with the same path. It isn't run, because that would change another tool's
   config.
@@ -95,8 +99,13 @@ agents.
 - `aside setup cursor` explains that Cursor isn't supported and writes nothing.
 
 For Codex, the hook still has to be trusted in `/hooks` (see below). The
-command says so after a first install and when it changed an existing hook's
-command.
+command says so after a first install, and says Codex may ask again when it
+changed an existing hook's command. That "may" is deliberate: I haven't
+confirmed in the Codex CLI that a changed command always needs re-trusting.
+
+Setting up Claude Code also turns the hook on in Cursor, which imports it
+([docs/cursor.md](cursor.md)). The command prints that note before it writes.
+No setting to stop Cursor importing it is known, so none is suggested.
 
 Checked on Linux (Go 1.25) with throwaway configs, in the unit tests and in
 `test/e2e/run.sh`. Not yet checked by hand on macOS or Windows, and Codex's

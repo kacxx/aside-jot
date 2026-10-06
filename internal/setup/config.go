@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"slices"
 	"strings"
 )
 
@@ -15,6 +17,10 @@ const event = "UserPromptSubmit"
 type Hook struct {
 	Agent   string // "claude" or "codex"
 	Command string // the command string, already quoted
+	// Binary is the unquoted path of this binary. An entry that runs it is
+	// aside's whatever the file is called, so a renamed or side-by-side build
+	// (aside-dev) updates its own hook instead of stacking another.
+	Binary string
 	// Windows also sets "commandWindows", which Codex prefers on Windows. It
 	// is left alone on other platforms, so a config shared between machines
 	// keeps the Windows command.
@@ -73,7 +79,7 @@ func Merge(data []byte, h Hook) ([]byte, Change, error) {
 		groupChanged := false
 		for hi := 0; hi < len(handlers); hi++ {
 			e, err := parseObject(handlers[hi])
-			if err != nil || !isAside(e, h.Agent) {
+			if err != nil || !isAside(e, h) {
 				continue
 			}
 			if found {
@@ -98,8 +104,8 @@ func Merge(data []byte, h Hook) ([]byte, Change, error) {
 		if !groupChanged {
 			continue
 		}
-		if len(handlers) == 0 && len(g.keys) <= 2 {
-			// Only "hooks" and maybe a "matcher": nothing left to run.
+		if len(handlers) == 0 && onlyKeys(g, "hooks", "matcher") {
+			// Nothing left to run, and nothing else in the group to keep.
 			groups = append(groups[:gi], groups[gi+1:]...)
 			gi--
 			continue
@@ -138,21 +144,37 @@ func Merge(data []byte, h Hook) ([]byte, Change, error) {
 
 // isAside reports whether handler e runs `aside hook <agent>`, or the same
 // under the pre-rename name, `jot hook <agent>`, in either command field.
-func isAside(e *object, agent string) bool {
+func isAside(e *object, h Hook) bool {
 	for _, k := range []string{"command", "commandWindows"} {
-		if isAsideCommand(stringField(e, k), agent) {
+		if isAsideCommand(stringField(e, k), h) {
 			return true
 		}
 	}
 	return false
 }
 
-func isAsideCommand(cmd, agent string) bool {
+func isAsideCommand(cmd string, h Hook) bool {
 	f := splitCommand(cmd)
-	if len(f) != 3 || f[1] != "hook" || f[2] != agent {
+	if len(f) != 3 || f[1] != "hook" || f[2] != h.Agent {
 		return false
 	}
-	name := f[0]
+	return isAsideProgram(f[0], h.Binary)
+}
+
+// isAsideProgram reports whether prog is aside (or its pre-rename name, jot),
+// or is this very binary: the same path or, through links, the same file.
+func isAsideProgram(prog, bin string) bool {
+	if bin != "" {
+		if prog == bin || strings.ReplaceAll(prog, `\`, "/") == strings.ReplaceAll(bin, `\`, "/") {
+			return true
+		}
+		if a, err := os.Stat(prog); err == nil {
+			if b, err := os.Stat(bin); err == nil && os.SameFile(a, b) {
+				return true
+			}
+		}
+	}
+	name := prog
 	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
 		name = name[i+1:]
 	}
@@ -206,6 +228,40 @@ func splitCommand(s string) []string {
 		out = append(out, cur.String())
 	}
 	return out
+}
+
+func onlyKeys(o *object, allowed ...string) bool {
+	for _, k := range o.keys {
+		if !slices.Contains(allowed, k) {
+			return false
+		}
+	}
+	return true
+}
+
+// Section returns just the hooks.UserPromptSubmit part of a config produced
+// by Merge, indented. A dry run shows this instead of the whole file, which
+// can hold env values and tokens that don't belong in a terminal or an
+// agent's context.
+func Section(config []byte) ([]byte, error) {
+	top, err := parseObject(config)
+	if err != nil {
+		return nil, err
+	}
+	hooks, err := parseObject(top.vals["hooks"])
+	if err != nil {
+		return nil, err
+	}
+	hooksOnly := &object{vals: map[string]json.RawMessage{}}
+	hooksOnly.set(event, hooks.vals[event])
+	wrap := &object{vals: map[string]json.RawMessage{}}
+	wrap.set("hooks", hooksOnly.marshal())
+	var out bytes.Buffer
+	if err := json.Indent(&out, wrap.marshal(), "", "  "); err != nil {
+		return nil, err
+	}
+	out.WriteByte('\n')
+	return out.Bytes(), nil
 }
 
 func stringField(o *object, k string) string {

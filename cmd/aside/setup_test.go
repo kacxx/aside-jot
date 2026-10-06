@@ -131,6 +131,43 @@ func TestSetupQuotesPathWithSpace(t *testing.T) {
 	}
 }
 
+func TestSetupDryRunHidesRestOfFile(t *testing.T) {
+	home, _ := setupEnv(t)
+	path := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"env":{"TOKEN":"s3cret"},"hooks":{"UserPromptSubmit":[]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runSetup(t, "claude", "--dry-run")
+	if err != nil || strings.Contains(out, "s3cret") || !strings.Contains(out, "UserPromptSubmit") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+func TestSetupRenamedBinaryIsIdempotent(t *testing.T) {
+	home, _ := setupEnv(t)
+	dev := filepath.Join(home, "bin", "aside-dev")
+	if err := os.MkdirAll(filepath.Dir(dev), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dev, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	setupBinary = func() setup.Binary { return setup.Binary{Arg0: dev, TempDir: filepath.Join(home, "no-temp")} }
+	for i, want := range []string{"Added", "nothing changed", "nothing changed"} {
+		out, err := runSetup(t, "claude")
+		if err != nil || !strings.Contains(out, want) {
+			t.Fatalf("run %d: %v\n%s", i, err, out)
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if strings.Count(string(b), "hook claude") != 1 {
+		t.Errorf("settings.json:\n%s", b)
+	}
+}
+
 func TestSetupCursorWritesNothing(t *testing.T) {
 	home, _ := setupEnv(t)
 	out, err := runSetup(t, "cursor")
