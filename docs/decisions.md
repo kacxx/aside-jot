@@ -193,6 +193,7 @@ depends on the jot's age: 171 of the files were modified in the last week and
 
 How the link is used was replaced by "Open links are opened with `aside open`,
 not clicked" below.
+
 ## Open links are opened with `aside open`, not clicked
 
 **Decided:** `aside open <id>` opens a jot's chat link with `open` on macOS, and
@@ -214,6 +215,17 @@ settings.
 **Not changed:** the MCP server is still read-only. `aside open` is one more
 command an agent with shell access can run, guarded only by its command
 approval, like `aside done`. It changes no jot and only focuses a chat.
+
+**Full path:** agents run it from a shell that may not have aside on its `PATH`
+(on one Mac, `~/go/bin` was on neither a login nor a non-interactive shell's), so
+the MCP tools return `open_command` with the full path to aside, from
+`os.Executable`, next to each `open_url`, and the descriptions tell the agent
+to offer it as given.
+
+**Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
+Desktop jot brought Desktop forward on that jot's own session. Not verified:
+`aside open` for a Codex app jot (the Codex link was only tested on Windows,
+where `aside open` doesn't run).
 
 **Revisit if:** Desktop makes links in chat clickable, or documents a link of
 its own. `aside open` on Windows and Linux isn't built because it hasn't been

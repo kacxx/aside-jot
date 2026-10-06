@@ -145,9 +145,11 @@ Only chats with a jot in them can be found, so start a ticket's chat with
 `>> session: SUP-4821 …`.
 
 On a Mac, `aside open 12` opens the chat a jot came from, for jots made in
-Claude Desktop or the Codex app (`aside show 12` prints the link as `open:`,
-and the MCP tools return it as `open_url`). A jot with no link, such as one from
-a terminal `claude` session, gets its resume command instead.
+Claude Desktop (checked on Desktop 2.19675.0). `aside show 12` prints the link as
+`open:`, and the MCP tools return it as `open_url` with an `open_command`. Codex
+app jots get a link too, but `aside open` hasn't been run for one on a Mac with
+the Codex app. A jot with no link, such as one from a terminal `claude` session,
+gets its resume command instead.
 
 ### Turn a jot into a GitHub issue
 

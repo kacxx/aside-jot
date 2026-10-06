@@ -143,6 +143,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return err
 	}
 	defer svc.Close()
+	if desktopSessionsDir != "" {
+		svc.SetDesktopSessionsDir(desktopSessionsDir)
+	}
 
 	switch cmd {
 	case "add":
@@ -354,13 +357,29 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 	return nil
 }
 
+// desktopSessionsDir, if set, replaces where Claude Desktop's session files
+// are looked for. Tests set it.
+var desktopSessionsDir string
+
 // openGOOS and openURL are what aside open runs on; tests replace them.
 var (
 	openGOOS = runtime.GOOS
 	openURL  = func(ctx context.Context, u string) error {
-		return exec.CommandContext(ctx, "open", u).Run()
+		return openWith(ctx, "/usr/bin/open", u)
 	}
 )
+
+// openWith runs bin on u, and keeps what it printed if it fails: open says
+// why, for example that no application handles the link's scheme.
+func openWith(ctx context.Context, bin, u string) error {
+	out, err := exec.CommandContext(ctx, bin, u).CombinedOutput()
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+	}
+	return err
+}
 
 // cmdOpen opens the chat a jot came from. The link is rebuilt the way show
 // builds it, and only the two known kinds are passed to the system, so a

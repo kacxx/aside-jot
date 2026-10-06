@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -43,6 +44,13 @@ var (
 // Claude Desktop continue link or a Codex thread link, with a UUID id.
 func OpenableURL(u string) bool {
 	return openableClaude.MatchString(u) || openableCodex.MatchString(u)
+}
+
+// OpenCommand returns the shell command that opens jot id's chat with the
+// aside at exe. Agents run it from a shell that may not have aside on its
+// PATH, so it uses the full path.
+func OpenCommand(exe string, id int64) string {
+	return shellQuote(exe) + " open " + strconv.FormatInt(id, 10)
 }
 
 // ResumeFor returns the command that reopens the session e belongs to, or ""
