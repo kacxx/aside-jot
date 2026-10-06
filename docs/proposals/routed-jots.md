@@ -3,62 +3,96 @@
 Status: proposal for review. No code until approved.
 
 Built from issue #30, its 4 Oct review comment and docs/decisions.md.
-Where this proposal follows that comment, it says so.
+Where this proposal follows that comment, it says so. Revised after the
+review on PR #54.
 
 ## Summary
 
 A jot that starts with a registered route (`jira: …`, `slack: …`) is tagged
 with that route at capture. A worker lists open items for its route and closes
-them with `aside done <id> <note>`. aside never calls Jira or Slack, has no
-claiming, and has no LLM. Every outward action is confirmed by the user, always.
+them with `aside done <id> --note <link>`. aside never calls Jira or Slack, has
+no claiming, and has no LLM. Confirmation of outward actions is the user's
+control, and aside can't enforce it (decision 5).
 
 ## Decisions
 
 **1. Routes live in a config file next to the database** (`routes` file, one
 route name per line). Not an environment variable: the hook runs in whatever
 environment the editor gives it, the same problem that ruled out a tag allowlist
-in "Ticket keys are matched at query time". If the file is missing, nothing is
-routed and everything behaves as today. This answers open question 2.
+in "Ticket keys are matched at query time". `aside paths` prints where the file
+is. Names are lower-case words (`[a-z][a-z0-9_-]*`); a line that doesn't fit,
+and the reserved names `any` and `none` (decision 4), are ignored with a
+warning from `aside paths`, not from the hook. Blank lines and `#` comments are
+skipped. If the file is missing, nothing is routed and everything behaves as
+today. This answers open question 2.
 
 **2. The route is fixed at capture.** It is stored in the existing `metadata`
-JSON (`route`), so there is no schema change and no migration. Registering
-`todo` next month doesn't queue old `todo:` jots, and removing a route doesn't
-orphan queued ones. Matching: the first token, case-insensitive, must be
-`name:` followed by a space and more text, and `name` must be in the file.
-Anything else, such as `todo:`, a typo or a bare `jira:`, is ordinary text.
-The stored text is unchanged (the `jira:` prefix stays).
+JSON (`route`), in normal form (lower case, so `Jira:` stores `jira`), so there
+is no schema change and no migration. Registering `todo` next month doesn't
+queue old `todo:` jots, and removing a route doesn't orphan queued ones.
 
-**3. Provenance is recorded as a signal, not a security boundary.** Both options
-in the issue are forgeable by an agent with a shell, as the review noted
-(`env -u CLAUDECODE aside add …`, or piping JSON into `aside hook claude`). So:
-- `aside add` never routes. It is the one path that can't be the user typing in
-  an agent, so it is the cheap, honest exclusion. Hook captures route.
-- The real control is confirmation (decision 5). The docs will say the source
-  check is not a boundary. This answers open question 1: hook captures only,
-  no environment sniffing.
+Matching: the text must start with `name:` and a space, then more text, and
+`name` (case-insensitive) must be in the file. Anything else is ordinary text:
+`todo:`, a typo, a bare `jira:`, and `jira:SUP-1` with no space after the colon,
+which people will type. The stored text is unchanged (the `jira:` prefix stays).
+
+This knowingly goes against "Ticket keys are matched at query time, not
+tagged": a route fixed at capture has the same silent-miss failure. If the file
+is missing when a jot is captured, the jot never routes, and there is no write
+command to fix it later. The fix-at-capture choice is still right for the
+`todo` reason above, so the misses are made visible instead:
+- The hook reply shows the route: `✓ Jotted #41 → jira`. A `jira:` jot without
+  the arrow is noticed straight away.
+- The file is read only after `capture.Match` succeeds, so ordinary prompts
+  don't pay for it. If it exists but can't be read, the jot is saved unrouted,
+  the hook still exits 0, and the reply says `(routes file unreadable)` after
+  the id, so the miss is seen at the time.
+
+**3. Provenance is a signal, not a security boundary.** An agent with a shell
+can forge either source: `aside add "jira: …"` (or `env -u CLAUDECODE aside
+add …`), or `echo '{…}' | aside hook claude`. So:
+- Hook captures from `claude` and `codex` route. `cursor` doesn't: Cursor is
+  parked ([cursor.md](../cursor.md)) and nothing new is built for it.
+- `aside add` does not route. This stops an agent that runs `aside add
+  "jira: …"` innocently. It doesn't stop a deliberate one, which can pipe
+  into the hook.
+- Confirmation (decision 5) is the only control either way. The docs say the
+  source check is not a boundary. This is what open question 1 now asks.
 
 **4. Worker API stays minimal.**
-- `aside inbox --route jira` (and `--route any`, `--route none`), open items
-  only by default. Same filter on the MCP `inbox` tool, which stays read-only.
-- Closing is the existing `aside done <id> [note]` (#43). A worker passes the
-  result link as the note. No new write command.
+- `aside inbox --route jira` filters the inbox to that route. `--route any`
+  means every routed jot and `--route none` means unrouted ones. `inbox`
+  already lists only open jots, and the filter keeps that. Same filter on the
+  MCP `inbox` tool, which stays read-only.
+- `show`, `search` and `find` (CLI and MCP) show a jot's route as a `route`
+  field. List lines don't change: the text already begins with `jira:`.
+- Closing is the existing `aside done <id>... [--note "why"]` (#43). A worker
+  passes the result link as `--note <link>`. No new write command. The note
+  must be passed with the flag: `aside done 1 <link>` fails, as `<link>` is
+  read as an id.
 - No claiming, lease or timeout. Add one only if an item is processed twice.
-- No `abandoned` state. `done` with no note already means it (per the review). Add
-  one only if abandoned items need reporting.
+- No `abandoned` state. `done` with no note already means it (per the review).
+  Add one only if abandoned items need reporting.
 
-**5. Confirmation is mandatory, and it is the worker's contract, not code in
-aside.** The docs state: a worker may only draft; the user confirms every Slack
-post, Jira ticket or other outward action, every time. Jot text often holds
-pasted tickets or logs, so a worker with write access acting unconfirmed is the
-prompt-injection path. aside can't enforce this, so the docs won't claim it does.
+**5. Confirmation is the worker's contract, not code in aside.** The docs
+state: a worker may only draft; the user confirms every Slack post, Jira ticket
+or other outward action, every time. Jot text often holds pasted tickets or
+logs, so a worker with write access acting unconfirmed is the prompt-injection
+path. aside can't enforce this, so the docs won't claim it does.
 
-**6. Routed jots still show in `aside inbox`**, marked with their route, e.g.
-`#41 [jira] SUP-4821 needs a backend ticket`. They stay in the user's own view, and
-`--route none` shows what isn't routed.
+**6. Routed jots still show in `aside inbox`**, unchanged:
+`#41   today  jira: SUP-4821 needs a backend ticket  [aside-jot@main]`. They
+stay in the user's own view, and `--route none` shows what isn't routed. No
+new bracket marker: the text already starts with the route, and the trailing
+`[…]` already means the location.
 
-**7. `gh` route.** `aside promote` is the `gh` worker in spirit but stays a
-command the user runs. It already always asks `[y/N]` (#45). Nothing to change; the
-`gh` route is just a registered name like the others.
+**7. `gh` route.** `aside promote` stays a command the user runs, and it asks
+`[y/N]` unless `--yes` is passed (#45). `--yes` exists for scripts and is
+required when stdin isn't a terminal, so an agent with a shell can pass it. The
+`gh` route is therefore an exception to "the user confirms every outward
+action", and the docs say so rather than claim `promote` always asks. Whether
+`--yes` should go away once `gh` is a route is left out of this design: it
+changes #45's decision, so it needs its own entry.
 
 ## Out of scope
 
@@ -67,16 +101,18 @@ any service, and claiming.
 
 ## Rough size
 
-One PR, about: route parsing in `internal/capture` (pure function, table tests
-like `Match`), config reading in `internal/app`, `--route` on `inbox` plus the
-MCP tool, the `[route]` marker in output, docs and a decisions.md entry. The
-hook gating, `done` and the schema are untouched.
+One PR: route parsing in `internal/capture` (pure function, table tests like
+`Match`), reading the `routes` file in `internal/app` after a match, the route
+in the hook reply, `--route` on `inbox` plus the MCP tool, a `route` field in
+`show`, `search`, `find` and MCP, `aside paths` printing the file, docs and a
+decisions.md entry. Hook gating, `done` and the schema are untouched.
 
 ## Open questions
 
-1. Is "`aside add` never routes" acceptable? It means a user can't route from their
-   own terminal. The alternative (route `cli` jots too) makes the agent-shell
-   case route, with only confirmation protecting the user.
+1. Is "`aside add` never routes" worth it? It stops accidental agent jots, not
+   deliberate ones, and it costs the user routing from their own terminal.
+   Confirmation is the only control either way, so this is about convenience:
+   is stopping the accidental case worth losing terminal routing?
 2. Route file format: plain names, one per line, or something richer like
    `jira = SUP-` later? I'd start plain.
 3. Timing: the issue comment says to revisit in late October after a few weeks of
