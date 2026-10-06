@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -58,6 +59,9 @@ type Server struct {
 	now     func() time.Time
 	// exe is the path to aside, for open_command; "" means none is known.
 	exe string
+	// goos is the system aside runs on: aside open works only on macOS, so
+	// elsewhere no open_command is offered.
+	goos string
 }
 
 // NewServer returns a server backed by svc.
@@ -66,13 +70,16 @@ func NewServer(svc Reader, version string) *Server {
 	if err != nil {
 		exe = ""
 	}
-	return &Server{svc: svc, version: version, now: time.Now, exe: exe}
+	return &Server{svc: svc, version: version, now: time.Now, exe: exe, goos: runtime.GOOS}
 }
+
+// canOpen reports whether this server can offer an `aside open` command.
+func (s *Server) canOpen() bool { return s.exe != "" && s.goos == "darwin" }
 
 // withCommands sets OpenCommand on the entries that have an OpenURL.
 func (s *Server) withCommands(es []app.Entry) {
 	for i := range es {
-		if app.OpenableURL(es[i].OpenURL) && s.exe != "" {
+		if app.OpenableURL(es[i].OpenURL) && s.canOpen() {
 			es[i].OpenCommand = app.OpenCommand(s.exe, es[i].ID)
 		}
 	}
@@ -396,7 +403,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 // sessionOpenCommand is the command that opens the session's chat, via its
 // newest jot, or "" if the session has no link.
 func (s *Server) sessionOpenCommand(x app.Session) string {
-	if !app.OpenableURL(x.OpenURL) || s.exe == "" {
+	if !app.OpenableURL(x.OpenURL) || !s.canOpen() {
 		return ""
 	}
 	return app.OpenCommand(s.exe, x.Latest().ID)

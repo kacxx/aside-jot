@@ -212,7 +212,7 @@ chat doesn't open it either (checked on Desktop 2.19675.0), so the tool
 descriptions tell the agent to offer `aside open <id>` instead, which opens
 the chat from your terminal (macOS only), or to run it when you ask. Each entry
 with a link also has `open_command`, the same command with the full path to
-aside, since an agent's shell may not have it on its `PATH`. It is set for Codex app threads (`codex://threads/<id>`) and for
+aside, since an agent's shell may not have it on its `PATH`. It is set only when the MCP server runs on macOS, and for Codex app threads (`codex://threads/<id>`) and for
 Claude Desktop sessions (`claude://code/continue?session=local_<id>`, which
 Desktop doesn't document). It is empty for everything else, including archived
 or deleted Desktop sessions, sessions started in the terminal, and

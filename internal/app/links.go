@@ -135,13 +135,17 @@ func defaultDesktopDir() string {
 // files up only if an entry came from there.
 func (s *Service) AddOpenURLs(ctx context.Context, es []Entry) {
 	byKey := map[sessionKey][]Entry{}
+	var ids []string
 	for _, e := range es {
 		if e.SessionID != "" {
+			if _, ok := byKey[keyOf(e)]; !ok {
+				ids = append(ids, e.SessionID)
+			}
 			byKey[keyOf(e)] = nil
 		}
 	}
-	if len(byKey) > 0 {
-		if all, err := s.store.List(ctx, "", 0); err == nil {
+	if len(ids) > 0 {
+		if all, err := s.store.BySessions(ctx, ids); err == nil {
 			for _, e := range all {
 				if _, ok := byKey[keyOf(e)]; ok {
 					byKey[keyOf(e)] = append(byKey[keyOf(e)], e)
