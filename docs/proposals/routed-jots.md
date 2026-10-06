@@ -24,7 +24,9 @@ is. Names are lower-case words (`[a-z][a-z0-9_-]*`); a line that doesn't fit,
 and the reserved names `any` and `none` (decision 4), are ignored with a
 warning from `aside paths`, not from the hook. Blank lines and `#` comments are
 skipped. If the file is missing, nothing is routed and everything behaves as
-today. This answers open question 2.
+today. This settles where the list lives (issue #30's open question 2) and the
+format is plain names; this doc's open question 2 asks only about a richer
+format later.
 
 **2. The route is fixed at capture.** It is stored in the existing `metadata`
 JSON (`route`), in normal form (lower case, so `Jira:` stores `jira`), so there
@@ -57,15 +59,18 @@ add …`), or `echo '{…}' | aside hook claude`. So:
   "jira: …"` innocently. It doesn't stop a deliberate one, which can pipe
   into the hook.
 - Confirmation (decision 5) is the only control either way. The docs say the
-  source check is not a boundary. This is what open question 1 now asks.
+  source check is not a boundary. This doc's open question 1 asks whether
+  excluding `add` is worth it.
 
 **4. Worker API stays minimal.**
 - `aside inbox --route jira` filters the inbox to that route. `--route any`
   means every routed jot and `--route none` means unrouted ones. `inbox`
   already lists only open jots, and the filter keeps that. Same filter on the
   MCP `inbox` tool, which stays read-only.
-- `show`, `search` and `find` (CLI and MCP) show a jot's route as a `route`
-  field. List lines don't change: the text already begins with `jira:`.
+- `aside show` prints a `route:` line, and the MCP `inbox`, `show`, `search`
+  and `find` results carry a `route` field. CLI list lines (`inbox`, `search`,
+  and the loose jots in `find`) don't change: the text already begins with
+  `jira:`.
 - Closing is the existing `aside done <id>... [--note "why"]` (#43). A worker
   passes the result link as `--note <link>`. No new write command. The note
   must be passed with the flag: `aside done 1 <link>` fails, as `<link>` is
@@ -84,7 +89,9 @@ path. aside can't enforce this, so the docs won't claim it does.
 `#41   today  jira: SUP-4821 needs a backend ticket  [aside-jot@main]`. They
 stay in the user's own view, and `--route none` shows what isn't routed. No
 new bracket marker: the text already starts with the route, and the trailing
-`[…]` already means the location.
+`[…]` already means the location. The cost is deliberate: a jot typed with
+`aside add`, or captured while the file was missing, prints like a routed one
+but no worker will see it. `aside inbox --route none` is how to find those.
 
 **7. `gh` route.** `aside promote` stays a command the user runs, and it asks
 `[y/N]` unless `--yes` is passed (#45). `--yes` exists for scripts and is
@@ -113,7 +120,7 @@ decisions.md entry. Hook gating, `done` and the schema are untouched.
    deliberate ones, and it costs the user routing from their own terminal.
    Confirmation is the only control either way, so this is about convenience:
    is stopping the accidental case worth losing terminal routing?
-2. Route file format: plain names, one per line, or something richer like
-   `jira = SUP-` later? I'd start plain.
+2. Richer route file format later (for example `jira = SUP-`)? Nothing here
+   needs it, so this proposal starts with plain names. Say if you want more now.
 3. Timing: the issue comment says to revisit in late October after a few weeks of
    using `find` and `sessions`. Approve the design now and build then, or wait?
