@@ -14,7 +14,7 @@ func fakeBinary(arg0 string) Binary {
 		Arg0:       arg0,
 		LookPath:   func(string) (string, error) { return "", errors.New("not found") },
 		Executable: func() (string, error) { return "", errors.New("no executable") },
-		TempDir:    filepath.FromSlash("/tmp"),
+		TempDir:    abs("/tmp"),
 		Getwd:      func() (string, error) { return abs("/work"), nil },
 		EvalLinks:  func(p string) (string, error) { return p, nil },
 	}
