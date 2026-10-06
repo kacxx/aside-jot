@@ -213,7 +213,7 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		return map[string]any{"tools": tools}, nil
+		return map[string]any{"tools": s.toolList()}, nil
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -240,9 +240,30 @@ const maxSessionMatches = 5
 // openNote is how the tools describe open_url. Claude Desktop doesn't open a
 // link in a chat when it is clicked, so the agent offers a command instead,
 // with the full path to aside because its shell may not have aside on PATH.
-const doneNote = "The server is read-only: to close jots, the user runs `aside done <id>... [--note \"why\"]` " +
-	"(several ids at once; --note records the reason, shown as done_note). If asked to close jots, run that command " +
-	"from the shell instead of saying it can't be done. "
+// doneToken stands in for the aside done command in tool descriptions; the
+// server fills in the full path to aside, which the agent's shell may not
+// have on its PATH.
+const doneToken = "{{DONE_COMMAND}}"
+
+const doneNote = "The server is read-only: when the user asks you to close jots, run `" + doneToken + "` " +
+	"from the shell (several ids at once; --note records why, shown as done_note). "
+
+// toolList returns tools with the done command filled in.
+func (s *Server) toolList() []map[string]any {
+	cmd := app.DoneCommand(s.exe)
+	out := make([]map[string]any, len(tools))
+	for i, t := range tools {
+		c := make(map[string]any, len(t))
+		for k, v := range t {
+			c[k] = v
+		}
+		if d, ok := c["description"].(string); ok {
+			c["description"] = strings.ReplaceAll(d, doneToken, cmd)
+		}
+		out[i] = c
+	}
+	return out
+}
 
 const openNote = "open_url, when set, is a link to the chat the jot came from (Claude Desktop, Codex app), " +
 	"and open_command is the command that opens it. Don't show open_url as a link: clicking it doesn't open " +

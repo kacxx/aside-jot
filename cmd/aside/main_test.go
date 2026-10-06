@@ -535,6 +535,15 @@ func TestCLIDoneSeveralWithNote(t *testing.T) {
 	if got, _ := sh("search", "WIKI/x"); !strings.Contains(got, "#1") || !strings.Contains(got, "#2") || strings.Contains(got, "#3") {
 		t.Fatalf("search by note: %q", got)
 	}
+	if got, _ := sh("search", "wiki"); !strings.Contains(got, "— note: see https://example.com/wiki/x") {
+		t.Fatalf("search shows the note that matched: %q", got)
+	}
+	if got, _ := sh("search", "one"); strings.Contains(got, "note:") {
+		t.Fatalf("no note suffix when the text matched: %q", got)
+	}
+	if got, err := sh("done", "1"); err != nil || got != "#1 already done\n" {
+		t.Fatalf("done again: %q %v", got, err)
+	}
 	if got, _ := sh("find", "wiki"); strings.Contains(got, "No jots match") {
 		t.Fatalf("find by note: %q", got)
 	}
