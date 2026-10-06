@@ -13,7 +13,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -46,7 +48,8 @@ type Reader interface {
 	Show(ctx context.Context, id int64) (app.Entry, error)
 	Search(ctx context.Context, q string, n int) ([]app.Entry, error)
 	Find(ctx context.Context, q string) ([]app.Session, []app.Entry, error)
-	AddOpenURLs(es []app.Entry)
+	AddOpenURLs(ctx context.Context, es []app.Entry)
+	AddSessionOpenURLs(ss []app.Session)
 }
 
 // Server serves MCP requests against a Reader.
@@ -54,11 +57,32 @@ type Server struct {
 	svc     Reader
 	version string
 	now     func() time.Time
+	// exe is the path to aside, for open_command; "" means none is known.
+	exe string
+	// goos is the system aside runs on: aside open works only on macOS, so
+	// elsewhere no open_command is offered.
+	goos string
 }
 
 // NewServer returns a server backed by svc.
 func NewServer(svc Reader, version string) *Server {
-	return &Server{svc: svc, version: version, now: time.Now}
+	exe, err := os.Executable()
+	if err != nil {
+		exe = ""
+	}
+	return &Server{svc: svc, version: version, now: time.Now, exe: exe, goos: runtime.GOOS}
+}
+
+// canOpen reports whether this server can offer an `aside open` command.
+func (s *Server) canOpen() bool { return s.exe != "" && s.goos == "darwin" }
+
+// withCommands sets OpenCommand on the entries that have an OpenURL.
+func (s *Server) withCommands(es []app.Entry) {
+	for i := range es {
+		if app.OpenableURL(es[i].OpenURL) && s.canOpen() {
+			es[i].OpenCommand = app.OpenCommand(s.exe, es[i].ID)
+		}
+	}
 }
 
 type request struct {
@@ -213,10 +237,18 @@ const maxLimit = 200
 // broad query can't return every jot of every session.
 const maxSessionMatches = 5
 
+// openNote is how the tools describe open_url. Claude Desktop doesn't open a
+// link in a chat when it is clicked, so the agent offers a command instead,
+// with the full path to aside because its shell may not have aside on PATH.
+const openNote = "open_url, when set, is a link to the chat the jot came from (Claude Desktop, Codex app), " +
+	"and open_command is the command that opens it. Don't show open_url as a link: clicking it doesn't open " +
+	"the chat in Claude Desktop. Offer the user open_command exactly as given, or run it when they ask to " +
+	"open the jot's chat. If they are not set, the chat has no link; its resume command is in find."
+
 var tools = []map[string]any{
 	{
 		"name":        "inbox",
-		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today).",
+		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today). " + openNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -228,9 +260,7 @@ var tools = []map[string]any{
 	{
 		"name": "show",
 		"description": "Show one jot by id, including its git context and metadata. issue_url is set " +
-			"when the user has promoted the jot to an issue. open_url, when present, links to the chat the jot came " +
-			"from (Codex app, Claude Desktop): show it to the user as a link; this tool doesn't open it. If it is " +
-			"absent, the chat has no link and its resume command is in find.",
+			"when the user has promoted the jot to an issue. " + openNote,
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
@@ -240,7 +270,7 @@ var tools = []map[string]any{
 	},
 	{
 		"name":        "search",
-		"description": "Search all jots (inbox and done) for a substring, newest first. Entries have open_url like inbox.",
+		"description": "Search all jots (inbox and done) for a substring, newest first. " + openNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -256,7 +286,11 @@ var tools = []map[string]any{
 		"description": "Find the agent sessions (Claude Code, Codex) where the user jotted about something, " +
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
-			"branch, resume_command to reopen it (the user runs it; this tool doesn't), and open_url, a link to the chat when it has one (empty otherwise; show the user the link). Only chats with " +
+			"branch, resume_command to reopen it (the user runs it; this tool doesn't). open_url, when set, is a link " +
+			"to the chat (Claude Desktop, Codex app) and open_command is the command that opens it: don't show " +
+			"open_url as a link, since clicking it doesn't open the chat in Claude Desktop; offer the user " +
+			"open_command exactly as given, or run it when they ask to open the chat. If they are not set, use " +
+			"resume_command. Only chats with " +
 			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
 			"total_sessions and total_not_in_a_session are the counts before the cut. Each session lists its " +
 			fmt.Sprint(maxSessionMatches) + " newest matching jots (oldest first), and match_count is how many matched.",
@@ -296,7 +330,8 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	case "inbox":
 		var es []app.Entry
 		es, err = s.svc.Inbox(ctx, args.Limit)
-		s.svc.AddOpenURLs(es)
+		s.svc.AddOpenURLs(ctx, es)
+		s.withCommands(es)
 		now := s.now()
 		aged := make([]agedEntry, 0, len(es))
 		for _, e := range es {
@@ -313,12 +348,14 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 			return toolError(fmt.Sprintf("no jot #%d", args.ID)), nil
 		}
 		one := []app.Entry{e}
-		s.svc.AddOpenURLs(one)
+		s.svc.AddOpenURLs(ctx, one)
+		s.withCommands(one)
 		v = one[0]
 	case "search":
 		var es []app.Entry
 		es, err = s.svc.Search(ctx, args.Query, args.Limit)
-		s.svc.AddOpenURLs(es)
+		s.svc.AddOpenURLs(ctx, es)
+		s.withCommands(es)
 		v = map[string]any{"entries": nonNil(es)}
 	case "find":
 		var ss []app.Session
@@ -326,6 +363,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		ss, loose, err = s.svc.Find(ctx, args.Query)
 		total := map[string]any{"total_sessions": len(ss), "total_not_in_a_session": len(loose)}
 		ss, loose = ss[:min(len(ss), args.Limit)], loose[:min(len(loose), args.Limit)]
+		s.svc.AddSessionOpenURLs(ss)
 		sessions := []map[string]any{}
 		for _, x := range ss {
 			latest := x.Latest()
@@ -341,6 +379,7 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 				"matches":        nonNil(x.Matches[max(0, len(x.Matches)-maxSessionMatches):]),
 				"resume_command": x.ResumeCommand(),
 				"open_url":       x.OpenURL,
+				"open_command":   s.sessionOpenCommand(x),
 			})
 		}
 		total["sessions"], total["not_in_a_session"] = sessions, nonNil(loose)
@@ -359,6 +398,15 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		"content":           []map[string]any{{"type": "text", "text": string(b)}},
 		"structuredContent": v,
 	}, nil
+}
+
+// sessionOpenCommand is the command that opens the session's chat, via its
+// newest jot, or "" if the session has no link.
+func (s *Server) sessionOpenCommand(x app.Session) string {
+	if !app.OpenableURL(x.OpenURL) || !s.canOpen() {
+		return ""
+	}
+	return app.OpenCommand(s.exe, x.Latest().ID)
 }
 
 // argumentError describes bad tool arguments without Go type names.

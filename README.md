@@ -131,6 +131,7 @@ SUP-4821 token TTL investigation
   claude · api@main · 2 jots · last 2d (#12)
   #11   2d     session: SUP-4821 token TTL investigation
   cd /Users/you/code/api && claude --resume 0f3c9a…
+  aside open 12
 
 Not in a session:
 #14   2026-10-04 18:03  SUP-4821 needs a backend ticket  [api@main]
@@ -143,6 +144,14 @@ aside sessions              # your recent chats and their labels
 
 Only chats with a jot in them can be found, so start a ticket's chat with
 `>> session: SUP-4821 …`.
+
+On a Mac, `aside open 12` opens the chat a jot came from, for jots made in
+Claude Desktop (checked on Desktop 2.19675.0). When a chat has such a link,
+`aside find` prints the command under its resume command, as above. `aside show 12` prints the link as
+`open:`, and the MCP tools return it as `open_url` with an `open_command`. Codex
+app jots get a link too, but `aside open` hasn't been run for one on a Mac with
+the Codex app. A jot with no link, such as one from a terminal `claude` session,
+gets its resume command instead.
 
 ### Turn a jot into a GitHub issue
 
@@ -182,6 +191,7 @@ little or nothing does.
 | `aside show <id>` | One jot with its context |
 | `aside search <query>` | Search all jots |
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
+| `aside open <id>` | Open the chat a jot came from (macOS; Claude Desktop and Codex app jots) |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
 | `aside done <id>` | Mark a jot done |
 | `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |

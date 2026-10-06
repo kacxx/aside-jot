@@ -207,12 +207,19 @@ only you write jots, never the model. `inbox` entries carry `age_days`
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
 
 `inbox`, `show`, `search` and `find` also return `open_url`, a link to the chat a jot
-came from, for the agent to show you as a clickable link (the tools open
-nothing). It is set for Codex app threads (`codex://threads/<id>`) and for
+came from. The tools open nothing, and clicking the link in a Claude Desktop
+chat doesn't open it either (checked on Desktop 2.19675.0), so the tool
+descriptions tell the agent to offer `aside open <id>` instead, which opens
+the chat from your terminal (macOS only), or to run it when you ask. Each entry
+with a link also has `open_command`, the same command with the full path to
+aside, since an agent's shell may not have it on its `PATH`. It is set only when the MCP server runs on macOS, and for Codex app threads (`codex://threads/<id>`) and for
 Claude Desktop sessions (`claude://code/continue?session=local_<id>`, which
 Desktop doesn't document). It is empty for everything else, including archived
 or deleted Desktop sessions, sessions started in the terminal, and
 `claude-desktop-3p`; use `find`'s `resume_command` there. The Desktop link is
 built on macOS only, from Desktop's session files; elsewhere it is empty.
-`aside show` prints the same link as `open:`. The Codex link is untested for
-threads started in the Codex CLI.
+`aside show` prints the same link as `open:`, and `aside open <id>` says so
+when a jot has no link and prints its resume command. `aside open` is checked
+for Claude Desktop jots only: the Codex link works from the Codex app on
+Windows, but `aside open` hasn't been run for a Codex jot on a Mac, and the link
+is untested for threads started in the Codex CLI.

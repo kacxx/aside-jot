@@ -454,7 +454,10 @@ func TestOpenURLInTools(t *testing.T) {
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"show","arguments":{"id":2}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"find","arguments":{"query":"codex"}}}`
 	var out bytes.Buffer
-	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+	srv := NewServer(svc, "test")
+	srv.exe = "/opt/my tools/aside" // a path with a space must be quoted
+	srv.goos = "darwin"
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
@@ -464,7 +467,23 @@ func TestOpenURLInTools(t *testing.T) {
 			t.Errorf("response %d has no open_url: %s", i+1, lines[i])
 		}
 	}
-	if strings.Contains(lines[2], "open_url") {
+	for _, i := range []int{0, 1, 3} {
+		if !strings.Contains(lines[i], `"open_command":"'/opt/my tools/aside' open 1"`) {
+			t.Errorf("response %d has no open_command: %s", i+1, lines[i])
+		}
+	}
+	if strings.Contains(lines[2], "open_url") || strings.Contains(lines[2], "open_command") {
 		t.Errorf("a jot with no session got a link: %s", lines[2])
+	}
+
+	// aside open only works on macOS, so elsewhere the link stays but no
+	// command is offered.
+	out.Reset()
+	srv.goos = "linux"
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, "open_url") || strings.Contains(got, " open 1") {
+		t.Errorf("off macOS want open_url and no open command: %s", got)
 	}
 }
