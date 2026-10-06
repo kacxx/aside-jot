@@ -59,7 +59,7 @@ type Server struct {
 	now     func() time.Time
 	// exe is the path to aside, for open_command; "" means none is known.
 	exe string
-	// goos is the system aside runs on: aside open works only on macOS, so
+	// goos is the system aside runs on: aside open works only on macOS and Windows, so
 	// elsewhere no open_command is offered.
 	goos string
 }
@@ -74,7 +74,7 @@ func NewServer(svc Reader, version string) *Server {
 }
 
 // canOpen reports whether this server can offer an `aside open` command.
-func (s *Server) canOpen() bool { return s.exe != "" && s.goos == "darwin" }
+func (s *Server) canOpen() bool { return s.exe != "" && app.CanOpen(s.goos) }
 
 // withCommands sets OpenCommand on the entries that have an OpenURL.
 func (s *Server) withCommands(es []app.Entry) {
