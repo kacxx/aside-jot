@@ -196,7 +196,7 @@ not clicked" below.
 
 ## Open links are opened with `aside open`, not clicked
 
-**Decided:** `aside open <id>` opens a jot's chat link with `open` on macOS, and
+**Decided:** `aside open <id>` opens a jot's chat link with `open` on macOS or `rundll32` on Windows, and
 the MCP tool descriptions tell the agent to offer that command (or run it when
 asked) instead of showing `open_url` as a link. It passes the system only a
 Claude Desktop `continue` link or a Codex thread link, each with a UUID id,
@@ -226,7 +226,7 @@ shows, after the limit is applied.
 (on one Mac, `~/go/bin` was on neither a login nor a non-interactive shell's), so
 the MCP tools return `open_command` with the full path to aside, from
 `os.Executable`, next to each `open_url`, and the descriptions tell the agent
-to offer it as given. Off macOS, where `aside open` can't run, no `open_command`
+to offer it as given. Off macOS and Windows, where `aside open` can't run, no `open_command`
 is offered (`open_url` still is).
 
 **Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
@@ -234,9 +234,22 @@ Desktop jot brought Desktop forward on that jot's own session. Not verified:
 `aside open` for a Codex app jot (the Codex link was only tested on Windows,
 where `aside open` doesn't run).
 
+**Windows:** Desktop 2.19675.1 on Windows 10 (build 19045, 2026-10-07) keeps its
+session files in `%APPDATA%\Claude\claude-code-sessions\<account>\<org>\local_<uuid>.json`
+(the MSIX package mirrors them under `%LOCALAPPDATA%\Packages\Claude_*`), with
+`cliSessionId` and `isArchived` in the first 1.2 KB as on the Mac, and `cliSessionId`
+equals the hook's session id. The `claude://code/continue?session=local_<id>` link
+switched Desktop to the right session when run from PowerShell, and
+`aside open 7` (build 78bdced) printed the same link, found by the lookup, and
+opened it. `rundll32 url.dll,FileProtocolHandler` reports no failure, so a link
+nothing handles prints "opened". Not checked on Windows: whether Desktop sets
+`CLAUDE_CODE_HOST_SESSION_ID` there, so the lookup is what was tested. The hook on
+that PC pointed at an old `jot.exe` until it was changed to `aside.exe`, which is
+why no Desktop jot had the id.
+
 **Revisit if:** Desktop makes links in chat clickable, or documents a link of
-its own. `aside open` on Windows and Linux isn't built because it hasn't been
-tested there.
+its own. `aside open` on Linux isn't built: there is no Claude Desktop for it that
+we know of.
 
 ## Promote only creates GitHub issues, on request
 

@@ -181,7 +181,7 @@ little or nothing does.
 | `aside show <id>` | One jot with its context |
 | `aside search <query>` | Search all jots |
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
-| `aside open <id>` | Open the chat a jot came from (macOS; Claude Desktop and Codex app jots) |
+| `aside open <id>` | Open the chat a jot came from (macOS and Windows; Claude Desktop and Codex app jots) |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
 | `aside done <id>... [--note "why"]` | Mark jots done; `--note` records why (search finds it) |
 | `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |
