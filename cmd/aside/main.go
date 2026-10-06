@@ -58,7 +58,7 @@ Usage:
   aside search <query...>    search all jots (substring, case-insensitive)
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
-  aside done <id>            mark a jot as done
+  aside done <id>... [--note "why"]  mark jots as done, optionally recording why
   aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
@@ -265,16 +265,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			printSession(stdout, s, nil)
 		}
 	case "done":
-		id, err := parseID(args)
-		if err != nil {
-			return err
-		}
-		if err := svc.Done(ctx, id); errors.Is(err, app.ErrNotFound) {
-			return fmt.Errorf("no jot #%d", id)
-		} else if err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "✓ #%d done\n", id)
+		return cmdDone(ctx, svc, args, stdout)
 	case "promote":
 		return cmdPromote(ctx, svc, args, stdin, stdout)
 	case "backup":
@@ -294,6 +285,47 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return mcp.NewServer(svc, buildVersion()).Serve(ctx, stdin, stdout)
 	default:
 		return fmt.Errorf("unknown command %q (run 'aside help')", cmd)
+	}
+	return nil
+}
+
+func cmdDone(ctx context.Context, svc *app.Service, args []string, w io.Writer) error {
+	const usage = `usage: aside done <id>... [--note "why"]`
+	fs := flag.NewFlagSet("done", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	note := fs.String("note", "", "why the jots are done; may contain links")
+	// Flags may come before, between or after the ids.
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return fmt.Errorf("done: %w (%s)", err, usage)
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		pos = append(pos, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+	if len(pos) == 0 {
+		return errors.New("expected at least one jot id (" + usage + ")")
+	}
+	ids := make([]int64, len(pos))
+	for i, p := range pos {
+		id, err := parseID([]string{p})
+		if err != nil {
+			return err
+		}
+		ids[i] = id
+	}
+	if err := svc.DoneAll(ctx, ids, strings.TrimSpace(*note)); err != nil {
+		return err
+	}
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			fmt.Fprintf(w, "✓ #%d done\n", id)
+		}
 	}
 	return nil
 }
@@ -579,6 +611,7 @@ func printEntry(w io.Writer, e app.Entry) {
 	field("branch", e.Branch)
 	field("commit", e.CommitSHA)
 	field("issue", e.IssueURL)
+	field("note", e.DoneNote)
 	field("open", e.OpenURL)
 	if len(e.Metadata) > 0 {
 		field("metadata", string(e.Metadata))

@@ -111,6 +111,7 @@ aside inbox --older 7       # only the ones that have waited a week or more
 aside show 12               # one jot with its full context
 aside search ttl            # search every jot, done ones included
 aside done 12               # mark it done; it drops out of the inbox
+aside done 3 4 5 --note "pushed to Q4, see https://example.com/wiki/plan"   # several at once, with why
 ```
 
 ```
@@ -193,7 +194,7 @@ little or nothing does.
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
 | `aside open <id>` | Open the chat a jot came from (macOS; Claude Desktop and Codex app jots) |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
-| `aside done <id>` | Mark a jot done |
+| `aside done <id>... [--note "why"]` | Mark jots done; `--note` records why (search finds it) |
 | `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |
 | `aside backup <path>` | Copy the database safely; never overwrites |
 | `aside paths` | Where the data and binary are |

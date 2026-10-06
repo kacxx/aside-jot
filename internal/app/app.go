@@ -168,7 +168,14 @@ func (s *Service) Search(ctx context.Context, q string, n int) ([]Entry, error) 
 
 // Done marks an entry as done.
 func (s *Service) Done(ctx context.Context, id int64) error {
-	return s.store.SetStatus(ctx, id, store.StatusDone)
+	return s.DoneAll(ctx, []int64{id}, "")
+}
+
+// DoneAll marks every entry in ids done, or none if any id is missing (the
+// error is a *store.MissingError). A non-empty note records why, and replaces
+// the note of a jot that was already done.
+func (s *Service) DoneAll(ctx context.Context, ids []int64, note string) error {
+	return s.store.Done(ctx, ids, note, time.Now())
 }
 
 // Backup writes a consistent copy of the database to dst (never overwrites).

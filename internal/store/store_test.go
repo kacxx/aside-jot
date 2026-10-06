@@ -351,3 +351,50 @@ func TestBySessions(t *testing.T) {
 		t.Errorf("no ids: got %v, %v", got, err)
 	}
 }
+
+func TestDone(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	for _, txt := range []string{"a", "b", "c"} {
+		if _, err := s.Insert(ctx, &Entry{Text: txt, Metadata: json.RawMessage(`{"k":"v"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Date(2026, 10, 6, 1, 2, 3, 0, time.UTC)
+	var miss *MissingError
+	err := s.Done(ctx, []int64{1, 9, 2, 8}, "n", now)
+	if !errors.As(err, &miss) || !errors.Is(err, ErrNotFound) || len(miss.IDs) != 2 {
+		t.Fatalf("missing: %v", err)
+	}
+	if e, _ := s.Get(ctx, 1); e.Status != StatusInbox || e.DoneNote != "" {
+		t.Fatalf("batch must be all or nothing: %+v", e)
+	}
+	if err := s.Done(ctx, []int64{1, 2, 1}, "why", now); err != nil {
+		t.Fatal(err)
+	}
+	e, _ := s.Get(ctx, 1)
+	if e.Status != StatusDone || e.DoneNote != "why" || !strings.Contains(string(e.Metadata), `"k":"v"`) || !strings.Contains(string(e.Metadata), "done_at") {
+		t.Fatalf("done: %+v %s", e, e.Metadata)
+	}
+	// Done again without a note changes nothing; with one, replaces it.
+	if err := s.Done(ctx, []int64{1}, "", now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if e2, _ := s.Get(ctx, 1); e2.DoneNote != "why" || string(e2.Metadata) != string(e.Metadata) {
+		t.Fatalf("no-note redo: %s", e2.Metadata)
+	}
+	if err := s.Done(ctx, []int64{1}, "new", now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	e3, _ := s.Get(ctx, 1)
+	if e3.DoneNote != "new" || !strings.Contains(string(e3.Metadata), "2026-10-06T01:02:03") {
+		t.Fatalf("done_at must keep the first close: %s", e3.Metadata)
+	}
+	// Without a note, a jot has none and is searchable by text only.
+	if err := s.Done(ctx, []int64{3}, "", now); err != nil {
+		t.Fatal(err)
+	}
+	if es, _ := s.Search(ctx, "new", 0); len(es) != 1 || es[0].ID != 1 {
+		t.Fatalf("search note: %+v", es)
+	}
+}
