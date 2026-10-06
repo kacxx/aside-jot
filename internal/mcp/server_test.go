@@ -456,6 +456,7 @@ func TestOpenURLInTools(t *testing.T) {
 	var out bytes.Buffer
 	srv := NewServer(svc, "test")
 	srv.exe = "/opt/my tools/aside" // a path with a space must be quoted
+	srv.goos = "darwin"
 	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
 		t.Fatal(err)
 	}
@@ -473,5 +474,16 @@ func TestOpenURLInTools(t *testing.T) {
 	}
 	if strings.Contains(lines[2], "open_url") || strings.Contains(lines[2], "open_command") {
 		t.Errorf("a jot with no session got a link: %s", lines[2])
+	}
+
+	// aside open only works on macOS, so elsewhere the link stays but no
+	// command is offered.
+	out.Reset()
+	srv.goos = "linux"
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, "open_url") || strings.Contains(got, " open 1") {
+		t.Errorf("off macOS want open_url and no open command: %s", got)
 	}
 }

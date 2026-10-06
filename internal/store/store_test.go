@@ -324,3 +324,30 @@ func TestInsertOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestBySessions(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	for _, e := range []Entry{
+		{Text: "a1", SessionID: "a"}, {Text: "b1", SessionID: "b"},
+		{Text: "none"}, {Text: "a2", SessionID: "a"}, {Text: "c1", SessionID: "c"},
+	} {
+		if _, err := s.Insert(ctx, &e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.BySessions(ctx, []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var texts []string
+	for _, e := range got {
+		texts = append(texts, e.Text)
+	}
+	if want := "a2 b1 a1"; strings.Join(texts, " ") != want {
+		t.Errorf("got %v, want newest first %q", texts, want)
+	}
+	if got, err := s.BySessions(ctx, nil); err != nil || len(got) != 0 {
+		t.Errorf("no ids: got %v, %v", got, err)
+	}
+}

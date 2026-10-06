@@ -346,6 +346,24 @@ func (s *Store) List(ctx context.Context, status string, limit int) ([]Entry, er
 	return scan(rows)
 }
 
+// BySessions returns every entry whose session id is one of ids, newest first.
+func (s *Store) BySessions(ctx context.Context, ids []string) ([]Entry, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entries
+		WHERE session_id IN (`+marks+`) ORDER BY id DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scan(rows)
+}
+
 // Search returns the newest entries whose text contains q (case-insensitive
 // for ASCII). LIKE wildcards in q are matched literally.
 func (s *Store) Search(ctx context.Context, q string, limit int) ([]Entry, error) {

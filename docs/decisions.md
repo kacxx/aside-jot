@@ -226,7 +226,8 @@ shows, after the limit is applied.
 (on one Mac, `~/go/bin` was on neither a login nor a non-interactive shell's), so
 the MCP tools return `open_command` with the full path to aside, from
 `os.Executable`, next to each `open_url`, and the descriptions tell the agent
-to offer it as given.
+to offer it as given. Off macOS, where `aside open` can't run, no `open_command`
+is offered (`open_url` still is).
 
 **Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
 Desktop jot brought Desktop forward on that jot's own session. Not verified:
