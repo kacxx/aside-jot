@@ -1,6 +1,6 @@
 # Routed jots (#30): design proposal
 
-Status: proposal for review. No code until approved.
+Status: design approved on PR #54 (6 Oct 2026). Build waits until late October.
 
 Built from issue #30, its 4 Oct review comment and docs/decisions.md.
 Where this proposal follows that comment, it says so. Revised after the
@@ -25,8 +25,7 @@ and the reserved names `any` and `none` (decision 4), are ignored with a
 warning from `aside paths`, not from the hook. Blank lines and `#` comments are
 skipped. If the file is missing, nothing is routed and everything behaves as
 today. This settles where the list lives (issue #30's open question 2) and the
-format is plain names; this doc's open question 2 asks only about a richer
-format later.
+format is plain names; question 2 below covers a richer format later.
 
 **2. The route is fixed at capture.** It is stored in the existing `metadata`
 JSON (`route`), in normal form (lower case, so `Jira:` stores `jira`), so there
@@ -59,8 +58,7 @@ add …`), or `echo '{…}' | aside hook claude`. So:
   "jira: …"` innocently. It doesn't stop a deliberate one, which can pipe
   into the hook.
 - Confirmation (decision 5) is the only control either way. The docs say the
-  source check is not a boundary. This doc's open question 1 asks whether
-  excluding `add` is worth it.
+  source check is not a boundary. Question 1 below records the answer.
 
 **4. Worker API stays minimal.**
 - `aside inbox --route jira` filters the inbox to that route. `--route any`
@@ -114,13 +112,18 @@ in the hook reply, `--route` on `inbox` plus the MCP tool, a `route` field in
 `show`, `search`, `find` and MCP, `aside paths` printing the file, docs and a
 decisions.md entry. Hook gating, `done` and the schema are untouched.
 
-## Open questions
+## Questions and answers
 
-1. Is "`aside add` never routes" worth it? It stops accidental agent jots, not
-   deliberate ones, and it costs the user routing from their own terminal.
-   Confirmation is the only control either way, so this is about convenience:
-   is stopping the accidental case worth losing terminal routing?
-2. Richer route file format later (for example `jira = SUP-`)? Nothing here
-   needs it, so this proposal starts with plain names. Say if you want more now.
-3. Timing: the issue comment says to revisit in late October after a few weeks of
-   using `find` and `sessions`. Approve the design now and build then, or wait?
+1. **Should `aside add` route?** No, for this design. `add` stays unchanged and
+   only the hook path parses routes. If terminal routing is needed later it is
+   its own change, most likely an explicit `aside add --route NAME` flag, so an
+   agent writing `jira:` text by accident still doesn't route. Record it in
+   decisions.md as deferred, not rejected. (Answered on PR #54.)
+2. **Richer route file format?** Not now. Plain names, as in decision 1. A form
+   like `jira = SUP-` can be its own change if a worker needs it.
+3. **Timing.** The design is approved. The build waits until late October, as
+   the #30 comment says. Until then, jots meant for Jira or Slack start with
+   `jira:` or `slack:` and are stored as plain text. In late October,
+   `aside search "jira:"` and `aside search "slack:"` show whether there is
+   enough real use to build it and which worker to write first. (Answered on
+   PR #54.)
