@@ -262,16 +262,18 @@ you turn jots into issues. `show` returns a promoted jot's `issue_url`.
 came from. The tools open nothing, and clicking the link in a Claude Desktop
 chat doesn't open it either (checked on Desktop 2.19675.0), so the tool
 descriptions tell the agent to offer `aside open <id>` instead, which opens
-the chat from your terminal (macOS only), or to run it when you ask. Each entry
+the chat from your terminal (macOS and Windows), or to run it when you ask. Each entry
 with a link also has `open_command`, the same command with the full path to
-aside, since an agent's shell may not have it on its `PATH`. It is set only when the MCP server runs on macOS, and for Codex app threads (`codex://threads/<id>`) and for
+aside, since an agent's shell may not have it on its `PATH`. It is set only when the MCP server runs on macOS or Windows. The link is set for Codex app threads (`codex://threads/<id>`) and for
 Claude Desktop sessions (`claude://code/continue?session=local_<id>`, which
 Desktop doesn't document). It is empty for everything else, including archived
 or deleted Desktop sessions, sessions started in the terminal, and
 `claude-desktop-3p`; use `find`'s `resume_command` there. The Desktop link is
-built on macOS only, from Desktop's session files; elsewhere it is empty.
+built on macOS and Windows, from Desktop's session files (`~/Library/Application Support/Claude/claude-code-sessions` on macOS, `%APPDATA%\Claude\claude-code-sessions` on Windows); elsewhere it is empty.
 `aside show` prints the same link as `open:`, and `aside open <id>` says so
 when a jot has no link and prints its resume command. `aside open` is checked
-for Claude Desktop jots only: the Codex link works from the Codex app on
-Windows, but `aside open` hasn't been run for a Codex jot on a Mac, and the link
-is untested for threads started in the Codex CLI.
+for Claude Desktop jots only (macOS, and Windows 10 build 19045 with Desktop
+2.19675.1, where `aside open` uses `rundll32` and prints "opened" even if no
+app handles the link). The Codex link works from the Codex app on Windows, but
+`aside open` hasn't been run for a Codex jot on either system, and the link is
+untested for threads started in the Codex CLI.
