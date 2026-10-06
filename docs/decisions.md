@@ -272,3 +272,20 @@ ticket keys in this session" or listing tickets by count. Then add `jot_tags`
 with the allowlist in a config file next to the database, so every process
 sees the same one.
 
+## `aside setup` writes the path as invoked and doesn't run anything else
+
+**Decided:** `aside setup claude|codex` merges the hook into the agent's JSON
+config. It writes the binary's path as it was invoked (made absolute, symlinks
+kept), refuses a temporary binary, keeps the file's key order, backs it up
+before every change and treats `jot hook` entries as aside's own. `--mcp` only
+prints the `claude mcp add` / `codex mcp add` command.
+
+**Why:** a resolved path breaks when the tool is upgraded through a symlink
+(`os.Executable` resolves it on Linux), a `go run` path disappears, and
+decoding into Go maps would sort and reformat a file the user keeps by hand.
+Running `mcp add` would change another tool's config behind `--dry-run`'s back,
+which is what the no-surprises rule (ask before editing hook configs) is
+against.
+
+**Revisit when:** an agent offers an install or registration command of its
+own that aside can call safely.

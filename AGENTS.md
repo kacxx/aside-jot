@@ -34,6 +34,8 @@ environment variables kept the old name on purpose.
   (jot to GitHub issue via `gh`), `sessions.go` (`find` and `sessions`).
 - `internal/store/` — SQLite (pure Go, no cgo), one `entries` table, owner-only
   file permissions.
+- `internal/setup/` — `aside setup`: finds the binary path, quotes it, and
+  merges the hook into the agent's JSON config (order-preserving, with backup).
 - `internal/gitctx/` — best-effort git context with a time budget.
 - `internal/mcp/` — the read-only MCP server (`inbox`, `show`, `search`, `find`).
 - `testdata/hooks/<agent>/` — recorded hook payloads used by tests and the

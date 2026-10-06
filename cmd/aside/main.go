@@ -63,6 +63,8 @@ Usage:
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
   aside paths                print data paths and check which aside is on PATH
+  aside setup claude|codex [--dry-run] [--mcp]
+                             add the prompt hook to the agent's config file
   aside hook claude|codex|cursor
                              run as a prompt hook (reads the payload on stdin)
   aside mcp                  run the read-only MCP server on stdio
@@ -136,6 +138,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return nil
 	case "paths":
 		return cmdPaths(stdout)
+	case "setup":
+		return cmdSetup(args, stdout)
 	}
 
 	svc, err := app.OpenDefault()
