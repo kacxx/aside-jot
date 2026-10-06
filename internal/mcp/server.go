@@ -213,10 +213,17 @@ const maxLimit = 200
 // broad query can't return every jot of every session.
 const maxSessionMatches = 5
 
+// openNote is how the tools describe open_url. Claude Desktop doesn't open a
+// link in a chat when it is clicked, so the agent offers a command instead.
+const openNote = "open_url, when set, is a link to the chat the jot came from (Claude Desktop, Codex app). " +
+	"Don't show it as a link: clicking it doesn't open the chat in Claude Desktop. Offer the user the command " +
+	"`aside open <id>` (the jot's id), or run it when they ask to open the jot's chat. If open_url is empty " +
+	"the chat has no link; its resume command is in find."
+
 var tools = []map[string]any{
 	{
 		"name":        "inbox",
-		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today).",
+		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today). " + openNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -228,9 +235,7 @@ var tools = []map[string]any{
 	{
 		"name": "show",
 		"description": "Show one jot by id, including its git context and metadata. issue_url is set " +
-			"when the user has promoted the jot to an issue. open_url, when present, links to the chat the jot came " +
-			"from (Codex app, Claude Desktop): show it to the user as a link; this tool doesn't open it. If it is " +
-			"absent, the chat has no link and its resume command is in find.",
+			"when the user has promoted the jot to an issue. " + openNote,
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
@@ -240,7 +245,7 @@ var tools = []map[string]any{
 	},
 	{
 		"name":        "search",
-		"description": "Search all jots (inbox and done) for a substring, newest first. Entries have open_url like inbox.",
+		"description": "Search all jots (inbox and done) for a substring, newest first. " + openNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -256,7 +261,8 @@ var tools = []map[string]any{
 		"description": "Find the agent sessions (Claude Code, Codex) where the user jotted about something, " +
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
-			"branch, resume_command to reopen it (the user runs it; this tool doesn't), and open_url, a link to the chat when it has one (empty otherwise; show the user the link). Only chats with " +
+			"branch, resume_command to reopen it (the user runs it; this tool doesn't), and open_url (" +
+			"empty if the chat has no link; " + openNote + ") Only chats with " +
 			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
 			"total_sessions and total_not_in_a_session are the counts before the cut. Each session lists its " +
 			fmt.Sprint(maxSessionMatches) + " newest matching jots (oldest first), and match_count is how many matched.",

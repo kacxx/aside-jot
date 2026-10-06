@@ -256,3 +256,36 @@ func TestOpenURLNoDirSkipsTranscript(t *testing.T) {
 		t.Fatalf("got %q", got[0])
 	}
 }
+
+func TestOpenableURL(t *testing.T) {
+	good := []string{
+		"claude://code/continue?session=" + localA,
+		"codex://threads/" + cliA,
+	}
+	bad := []string{
+		"", "https://example.com", "file:///etc/passwd", "claude://resume?session=" + localA,
+		"claude://code/continue?session=" + cliA, // not a local_ id
+		"claude://code/continue?session=" + localA + "&x=1",
+		"claude://code/continue?session=" + localA + "\n",
+		"codex://threads/s1", "codex://threads/" + cliA + "/../x", " codex://threads/" + cliA,
+	}
+	for _, u := range good {
+		if !OpenableURL(u) {
+			t.Errorf("%q should be openable", u)
+		}
+	}
+	for _, u := range bad {
+		if OpenableURL(u) {
+			t.Errorf("%q should not be openable", u)
+		}
+	}
+}
+
+func TestResumeFor(t *testing.T) {
+	if got := ResumeFor(Entry{Source: "codex", SessionID: cliA}); got != "codex resume "+cliA {
+		t.Fatalf("got %q", got)
+	}
+	if got := ResumeFor(Entry{Source: "cli"}); got != "" {
+		t.Fatalf("no session: got %q", got)
+	}
+}
