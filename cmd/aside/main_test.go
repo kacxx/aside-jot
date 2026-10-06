@@ -506,3 +506,58 @@ func TestPromoteConfirmCLI(t *testing.T) {
 		t.Fatalf("--yes on a terminal: %q, %v", out, err)
 	}
 }
+
+func TestCLIDoneSeveralWithNote(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	sh := func(args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(""), &out)
+		return out.String(), err
+	}
+	for _, txt := range []string{"one", "two", "three", "four"} {
+		if _, err := sh("add", txt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A missing id fails naming it and closes nothing.
+	if _, err := sh("done", "1", "99", "98"); err == nil || !strings.Contains(err.Error(), "no jots #99, #98") {
+		t.Fatalf("done with missing ids: %v", err)
+	}
+	if got, _ := sh("inbox"); !strings.Contains(got, "one") {
+		t.Fatalf("nothing should be closed: %q", got)
+	}
+	if got, err := sh("done", "1", "#2", "--note", "see https://example.com/wiki/x"); err != nil || got != "✓ #1 done\n✓ #2 done\n" {
+		t.Fatalf("done: %q %v", got, err)
+	}
+	if got, _ := sh("show", "2"); !strings.Contains(got, "note:      see https://example.com/wiki/x") || !strings.Contains(got, "(done)") {
+		t.Fatalf("show: %q", got)
+	}
+	if got, _ := sh("search", "WIKI/x"); !strings.Contains(got, "#1") || !strings.Contains(got, "#2") || strings.Contains(got, "#3") {
+		t.Fatalf("search by note: %q", got)
+	}
+	if got, _ := sh("search", "wiki"); !strings.Contains(got, "— note: see https://example.com/wiki/x") {
+		t.Fatalf("search shows the note that matched: %q", got)
+	}
+	if got, _ := sh("search", "one"); strings.Contains(got, "note:") {
+		t.Fatalf("no note suffix when the text matched: %q", got)
+	}
+	if got, err := sh("done", "1"); err != nil || got != "#1 already done\n" {
+		t.Fatalf("done again: %q %v", got, err)
+	}
+	if got, _ := sh("find", "wiki"); strings.Contains(got, "No jots match") {
+		t.Fatalf("find by note: %q", got)
+	}
+	// Re-running with a note replaces it; flags may come first.
+	if _, err := sh("done", "--note", "pushed to Q4", "2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := sh("show", "2"); !strings.Contains(got, "note:      pushed to Q4") || strings.Contains(got, "wiki") {
+		t.Fatalf("replaced note: %q", got)
+	}
+	if got, _ := sh("show", "1"); !strings.Contains(got, "wiki") {
+		t.Fatalf("other jot keeps its note: %q", got)
+	}
+	if _, err := sh("done"); err == nil {
+		t.Fatal("done without ids must fail")
+	}
+}

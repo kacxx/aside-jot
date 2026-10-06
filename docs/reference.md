@@ -72,6 +72,29 @@ SUP-4821 token TTL investigation
 - Jots from `aside add` have no session. `find` lists matching ones under
   "Not in a session".
 
+## Done
+
+`aside done <id>... [--note "why"]` marks one or more jots done.
+
+- **All or nothing.** All ids are checked first. If any doesn't exist, the
+  command fails naming every missing id (`no jots #99, #98`) and closes none.
+  Output is one `✓ #N done` line per jot.
+- **`--note`** records why the jots were closed, and may contain links. It is
+  stored in each jot's metadata as `done_note`, with `done_at` (UTC) set the
+  first time the jot is closed. Flags may come before, between or after ids.
+- **Closing a done jot again** with `--note` replaces its note; without
+  `--note` it changes nothing.
+- `aside show` prints the note, and MCP `show` returns it as `done_note`.
+  `aside search` and `aside find` match note text as well as the jot's text.
+- The MCP `inbox` and `show` descriptions tell the agent the user closes jots
+  with this command, given with the full path to aside (an agent's shell may
+  not have it on `PATH`, as with `open_command`). The server stays read-only.
+- `done` prints `✓ #N done` for each jot it closed, and `#N already done` for
+  one that was already done and given no note. A jot closed by `aside promote`
+  also gets `done_at`.
+- `search` and `find` show `— note: …` on a result that matched only through
+  its note.
+
 ## Promote
 
 Some jots deserve more than a note. `aside promote <id>` turns one into a

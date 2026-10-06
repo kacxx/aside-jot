@@ -54,6 +54,16 @@ func OpenCommand(exe string, id int64) string {
 	return shellQuote(exe) + " open " + strconv.FormatInt(id, 10)
 }
 
+// DoneCommand returns the shell command, with the full path to aside at exe
+// for the same reason as OpenCommand, that closes jots. exe may be "" when
+// the path is unknown, which gives a bare aside.
+func DoneCommand(exe string) string {
+	if exe == "" {
+		exe = "aside"
+	}
+	return shellQuote(exe) + ` done <id>... [--note "why"]`
+}
+
 // ResumeFor returns the command that reopens the session e belongs to, or ""
 // if e has no session or its agent has no resume command.
 func ResumeFor(e Entry) string {

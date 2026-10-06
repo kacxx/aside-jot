@@ -58,7 +58,7 @@ Usage:
   aside search <query...>    search all jots (substring, case-insensitive)
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
-  aside done <id>            mark a jot as done
+  aside done <id>... [--note "why"]  mark jots as done, optionally recording why
   aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]
                              turn a jot into a GitHub issue with the gh CLI
   aside backup <path>        write a consistent copy of the database (never overwrites)
@@ -221,7 +221,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if len(es) == 0 {
 			fmt.Fprintf(stdout, "No jots match %q.\n", q)
 		}
-		printList(stdout, es)
+		printList(stdout, es, q)
 	case "find":
 		q := strings.Join(args, " ")
 		ss, loose, err := svc.Find(ctx, q)
@@ -236,14 +236,14 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			if i > 0 {
 				fmt.Fprintln(stdout)
 			}
-			printSession(stdout, s, s.Matches)
+			printSession(stdout, s, s.Matches, q)
 		}
 		if len(loose) > 0 {
 			if len(ss) > 0 {
 				fmt.Fprintln(stdout)
 			}
 			fmt.Fprintln(stdout, "Not in a session:")
-			printList(stdout, loose)
+			printList(stdout, loose, q)
 		}
 	case "sessions":
 		fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
@@ -262,19 +262,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			if i > 0 {
 				fmt.Fprintln(stdout)
 			}
-			printSession(stdout, s, nil)
+			printSession(stdout, s, nil, "")
 		}
 	case "done":
-		id, err := parseID(args)
-		if err != nil {
-			return err
-		}
-		if err := svc.Done(ctx, id); errors.Is(err, app.ErrNotFound) {
-			return fmt.Errorf("no jot #%d", id)
-		} else if err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "✓ #%d done\n", id)
+		return cmdDone(ctx, svc, args, stdout)
 	case "promote":
 		return cmdPromote(ctx, svc, args, stdin, stdout)
 	case "backup":
@@ -294,6 +285,53 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return mcp.NewServer(svc, buildVersion()).Serve(ctx, stdin, stdout)
 	default:
 		return fmt.Errorf("unknown command %q (run 'aside help')", cmd)
+	}
+	return nil
+}
+
+func cmdDone(ctx context.Context, svc *app.Service, args []string, w io.Writer) error {
+	const usage = `usage: aside done <id>... [--note "why"]`
+	fs := flag.NewFlagSet("done", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	note := fs.String("note", "", "why the jots are done; may contain links")
+	// Flags may come before, between or after the ids.
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return fmt.Errorf("done: %w (%s)", err, usage)
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		pos = append(pos, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+	if len(pos) == 0 {
+		return errors.New("expected at least one jot id (" + usage + ")")
+	}
+	ids := make([]int64, len(pos))
+	for i, p := range pos {
+		id, err := parseID([]string{p})
+		if err != nil {
+			return err
+		}
+		ids[i] = id
+	}
+	closed, err := svc.DoneAll(ctx, ids, strings.TrimSpace(*note))
+	if err != nil {
+		return err
+	}
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if closed[id] {
+			fmt.Fprintf(w, "✓ #%d done\n", id)
+		} else {
+			fmt.Fprintf(w, "#%d already done\n", id)
+		}
 	}
 	return nil
 }
@@ -474,7 +512,18 @@ func parseID(args []string) (int64, error) {
 	return id, nil
 }
 
-func printList(w io.Writer, es []app.Entry) {
+// noteMatch is the " — note: …" suffix for a done jot whose note, not its
+// text, is what matched query q, so the result line shows why it is listed.
+func noteMatch(e app.Entry, q string) string {
+	if e.DoneNote == "" || q == "" || strings.Contains(strings.ToLower(e.Text), strings.ToLower(q)) {
+		return ""
+	}
+	return "  — note: " + firstLine(e.DoneNote, 60)
+}
+
+// printList lists jots, one per line. q is the query that found them, "" if
+// none.
+func printList(w io.Writer, es []app.Entry, q string) {
 	for _, e := range es {
 		line := firstLine(e.Text, 80)
 		where := location(e)
@@ -485,7 +534,7 @@ func printList(w io.Writer, es []app.Entry) {
 		if e.Status != "inbox" {
 			status = "  (" + e.Status + ")"
 		}
-		fmt.Fprintf(w, "#%-4d %s  %s%s%s\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"), line, where, status)
+		fmt.Fprintf(w, "#%-4d %s  %s%s%s%s\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"), line, where, status, noteMatch(e, q))
 	}
 }
 
@@ -503,7 +552,7 @@ func printInbox(w io.Writer, es []app.Entry) {
 
 // printSession prints a session's label, a summary line, the given jots, the
 // command to resume it and, if the chat has a link, the command to open it.
-func printSession(w io.Writer, s app.Session, jots []app.Entry) {
+func printSession(w io.Writer, s app.Session, jots []app.Entry, q string) {
 	fmt.Fprintln(w, firstLine(s.LabelText(), 80))
 	latest := s.Latest()
 	parts := []string{s.Source}
@@ -521,7 +570,7 @@ func printSession(w io.Writer, s app.Session, jots []app.Entry) {
 		if e.Status != "inbox" {
 			status = "  (" + e.Status + ")"
 		}
-		fmt.Fprintf(w, "  #%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70), status)
+		fmt.Fprintf(w, "  #%-4d %-6s %s%s%s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70), status, noteMatch(e, q))
 	}
 	if cmd := s.ResumeCommand(); cmd != "" {
 		fmt.Fprintln(w, "  "+cmd)
@@ -579,6 +628,7 @@ func printEntry(w io.Writer, e app.Entry) {
 	field("branch", e.Branch)
 	field("commit", e.CommitSHA)
 	field("issue", e.IssueURL)
+	field("note", e.DoneNote)
 	field("open", e.OpenURL)
 	if len(e.Metadata) > 0 {
 		field("metadata", string(e.Metadata))
