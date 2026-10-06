@@ -57,7 +57,7 @@ prompt-injection path. aside can't enforce this, so the docs won't claim it does
 `--route none` shows what isn't routed.
 
 **7. `gh` route.** `aside promote` is the `gh` worker in spirit but stays a
-command you run. It already always asks `[y/N]` (#45). Nothing to change; the
+command the user runs. It already always asks `[y/N]` (#45). Nothing to change; the
 `gh` route is just a registered name like the others.
 
 ## Out of scope
@@ -76,7 +76,7 @@ hook gating, `done` and the schema are untouched.
 
 1. Is "`aside add` never routes" acceptable? It means a user can't route from their
    own terminal. The alternative (route `cli` jots too) makes the agent-shell
-   case route, with only confirmation protecting you.
+   case route, with only confirmation protecting the user.
 2. Route file format: plain names, one per line, or something richer like
    `jira = SUP-` later? I'd start plain.
 3. Timing: the issue comment says to revisit in late October after a few weeks of
