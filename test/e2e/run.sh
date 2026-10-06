@@ -47,6 +47,34 @@ else
   note "'aside' on bare PATH: $ON_PATH (environment-dependent; use the absolute binary path in configs)"
 fi
 
+hr "2b. aside setup against a throwaway home (never your real config)"
+SHOME="$TMP/home"; mkdir -p "$SHOME/.claude" "$SHOME/.codex"
+setup() { HOME="$SHOME" USERPROFILE="$SHOME" CLAUDE_CONFIG_DIR= CODEX_HOME= "$BIN" setup "$@" 2>&1; }
+CSET="$SHOME/.claude/settings.json"
+# Other settings, another hook and an old-name aside hook, to be merged into.
+printf '%s\n' '{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo done"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"jot hook claude"}]}]},"zed":1}' >"$CSET"
+BEFORE="$(cat "$CSET")"
+OUT="$(setup claude --dry-run --mcp)"; echo "$OUT" | sed 's/^/  /'
+[ "$(cat "$CSET")" = "$BEFORE" ] && ok "setup claude --dry-run writes nothing" || bad "dry run changed settings.json"
+echo "$OUT" | grep -q "claude mcp add --scope user aside -- $BIN mcp" && ok "--mcp prints the command" || bad "--mcp output"
+OUT="$(setup claude)"; echo "$OUT" | sed 's/^/  /'
+grep -q "jot hook" "$CSET" && bad "old jot hook entry kept" || ok "old jot hook entry replaced"
+[ "$(grep -c 'hook claude' "$CSET")" = 1 ] && ok "exactly one claude hook" || bad "claude hook duplicated or missing"
+grep -q '"echo done"' "$CSET" && grep -q '"theme": "dark"' "$CSET" && ok "other settings and hooks kept" || bad "other settings lost"
+[ -n "$(ls "$SHOME/.claude"/settings.json.bak-* 2>/dev/null)" ] && ok "backup written" || bad "no backup"
+echo "$OUT" | grep -q "docs/cursor.md" && ok "claude output mentions Cursor" || bad "no Cursor note"
+# The written command is what an agent runs: it must capture a jot.
+CMD="$(sed -n 's/.*"command": "\(.*aside hook claude\)".*/\1/p' "$CSET")"
+CAP="$(printf '{"prompt":">> via written hook","cwd":"%s"}' "$TMP" | JOT_DB="$TMP/setup-hook.db" sh -c "$CMD" 2>&1)"
+captured "$CAP" && ok "the written claude hook captures a jot" || bad "written hook output: $CAP"
+setup claude | grep -q "nothing changed" && ok "second setup claude is a no-op" || bad "second setup claude changed something"
+OUT="$(setup codex)"; echo "$OUT" | grep -q "/hooks" && ok "setup codex says to trust the hook" || bad "no trust reminder"
+grep -q "$BIN hook codex" "$SHOME/.codex/hooks.json" && ok "codex hook written" || bad "codex hook missing"
+echo '{ not json' >"$SHOME/.codex/hooks.json"
+setup codex >/dev/null && bad "setup codex accepted a broken file" || \
+  { [ "$(cat "$SHOME/.codex/hooks.json")" = '{ not json' ] && ok "unparseable hooks.json left untouched" || bad "broken hooks.json was modified"; }
+setup cursor | grep -q "isn't supported" && [ ! -e "$SHOME/.cursor" ] && ok "setup cursor writes nothing" || bad "setup cursor"
+
 hr "3. first run: empty inbox"
 OUT="$("$BIN" inbox 2>&1)"; echo "$OUT"
 echo "$OUT" | grep -qE '^#' && bad "inbox not empty on a fresh DB" || ok "inbox empty on first run"
