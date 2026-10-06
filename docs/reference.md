@@ -87,7 +87,13 @@ SUP-4821 token TTL investigation
 - `aside show` prints the note, and MCP `show` returns it as `done_note`.
   `aside search` and `aside find` match note text as well as the jot's text.
 - The MCP `inbox` and `show` descriptions tell the agent the user closes jots
-  with this command. The server stays read-only.
+  with this command, given with the full path to aside (an agent's shell may
+  not have it on `PATH`, as with `open_command`). The server stays read-only.
+- `done` prints `✓ #N done` for each jot it closed, and `#N already done` for
+  one that was already done and given no note. A jot closed by `aside promote`
+  also gets `done_at`.
+- `search` and `find` show `— note: …` on a result that matched only through
+  its note.
 
 ## Promote
 

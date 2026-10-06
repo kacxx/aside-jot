@@ -489,14 +489,19 @@ func TestOpenURLInTools(t *testing.T) {
 }
 
 func TestDescriptionsPointToDone(t *testing.T) {
-	for _, tl := range tools {
+	srv := &Server{exe: "/Users/me/go/bin/aside"}
+	for _, tl := range srv.toolList() {
 		name := tl["name"].(string)
 		if name != "inbox" && name != "show" {
 			continue
 		}
-		if d := tl["description"].(string); !strings.Contains(d, "aside done <id>... [--note") {
-			t.Errorf("%s description does not mention aside done: %s", name, d)
+		if d := tl["description"].(string); !strings.Contains(d, `/Users/me/go/bin/aside done <id>... [--note "why"]`) || strings.Contains(d, "{{") {
+			t.Errorf("%s description does not give the full-path aside done command: %s", name, d)
 		}
+	}
+	srv.exe = ""
+	if d := srv.toolList()[0]["description"].(string); !strings.Contains(d, "`aside done <id>...") {
+		t.Errorf("without a known path the command is bare aside: %s", d)
 	}
 }
 
@@ -510,7 +515,7 @@ func TestShowReturnsDoneNote(t *testing.T) {
 	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "x", Source: "cli"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DoneAll(ctx, []int64{1}, "moved to ESM-6392"); err != nil {
+	if _, err := svc.DoneAll(ctx, []int64{1}, "moved to ESM-6392"); err != nil {
 		t.Fatal(err)
 	}
 	res, rerr := NewServer(svc, "test").callTool(ctx, "show", json.RawMessage(`{"id":1}`))

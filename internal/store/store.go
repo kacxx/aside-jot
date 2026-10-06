@@ -430,6 +430,9 @@ func (s *Store) SetMetadata(ctx context.Context, id int64, key string, value any
 		return fmt.Errorf("entry %d: metadata is not a JSON object", id)
 	}
 	meta[key] = v
+	if status == StatusDone && cur != StatusDone {
+		meta[MetaDoneAt] = json.RawMessage(strconv.Quote(time.Now().UTC().Format(timeLayout)))
+	}
 	b, err := json.Marshal(meta)
 	if err != nil {
 		return err
@@ -465,11 +468,11 @@ func (e *MissingError) Is(target error) bool { return target == ErrNotFound }
 // exist it returns a *MissingError naming all of them and changes nothing.
 // A non-empty note is stored as metadata done_note, replacing an earlier one;
 // done_at is set when the entry was not already done. Closing a done entry
-// without a note changes nothing.
-func (s *Store) Done(ctx context.Context, ids []int64, note string, now time.Time) error {
+// without a note changes nothing. The result holds the ids that were changed.
+func (s *Store) Done(ctx context.Context, ids []int64, note string, now time.Time) (map[int64]bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	type row struct {
@@ -490,21 +493,23 @@ func (s *Store) Done(ctx context.Context, ids []int64, note string, now time.Tim
 			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		meta := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(raw), &meta); err != nil || meta == nil {
-			return fmt.Errorf("entry %d: metadata is not a JSON object", id)
+			return nil, fmt.Errorf("entry %d: metadata is not a JSON object", id)
 		}
 		rows[id] = row{meta: meta, done: status == StatusDone}
 	}
 	if len(missing) > 0 {
-		return &MissingError{IDs: missing}
+		return nil, &MissingError{IDs: missing}
 	}
+	changed := make(map[int64]bool, len(rows))
 	for id, r := range rows {
 		if r.done && note == "" {
 			continue
 		}
+		changed[id] = true
 		if note != "" {
 			v, _ := json.Marshal(note)
 			r.meta[MetaDoneNote] = v
@@ -515,14 +520,17 @@ func (s *Store) Done(ctx context.Context, ids []int64, note string, now time.Tim
 		}
 		b, err := json.Marshal(r.meta)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE entries SET metadata = ?, status = ? WHERE id = ?`,
 			string(b), StatusDone, id); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return changed, nil
 }
 
 // Backup writes a consistent copy of the database to dst using VACUUM INTO.

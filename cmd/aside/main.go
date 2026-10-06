@@ -221,7 +221,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if len(es) == 0 {
 			fmt.Fprintf(stdout, "No jots match %q.\n", q)
 		}
-		printList(stdout, es)
+		printList(stdout, es, q)
 	case "find":
 		q := strings.Join(args, " ")
 		ss, loose, err := svc.Find(ctx, q)
@@ -236,14 +236,14 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			if i > 0 {
 				fmt.Fprintln(stdout)
 			}
-			printSession(stdout, s, s.Matches)
+			printSession(stdout, s, s.Matches, q)
 		}
 		if len(loose) > 0 {
 			if len(ss) > 0 {
 				fmt.Fprintln(stdout)
 			}
 			fmt.Fprintln(stdout, "Not in a session:")
-			printList(stdout, loose)
+			printList(stdout, loose, q)
 		}
 	case "sessions":
 		fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
@@ -262,7 +262,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			if i > 0 {
 				fmt.Fprintln(stdout)
 			}
-			printSession(stdout, s, nil)
+			printSession(stdout, s, nil, "")
 		}
 	case "done":
 		return cmdDone(ctx, svc, args, stdout)
@@ -317,14 +317,20 @@ func cmdDone(ctx context.Context, svc *app.Service, args []string, w io.Writer) 
 		}
 		ids[i] = id
 	}
-	if err := svc.DoneAll(ctx, ids, strings.TrimSpace(*note)); err != nil {
+	closed, err := svc.DoneAll(ctx, ids, strings.TrimSpace(*note))
+	if err != nil {
 		return err
 	}
 	seen := map[int64]bool{}
 	for _, id := range ids {
-		if !seen[id] {
-			seen[id] = true
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if closed[id] {
 			fmt.Fprintf(w, "✓ #%d done\n", id)
+		} else {
+			fmt.Fprintf(w, "#%d already done\n", id)
 		}
 	}
 	return nil
@@ -506,7 +512,18 @@ func parseID(args []string) (int64, error) {
 	return id, nil
 }
 
-func printList(w io.Writer, es []app.Entry) {
+// noteMatch is the " — note: …" suffix for a done jot whose note, not its
+// text, is what matched query q, so the result line shows why it is listed.
+func noteMatch(e app.Entry, q string) string {
+	if e.DoneNote == "" || q == "" || strings.Contains(strings.ToLower(e.Text), strings.ToLower(q)) {
+		return ""
+	}
+	return "  — note: " + firstLine(e.DoneNote, 60)
+}
+
+// printList lists jots, one per line. q is the query that found them, "" if
+// none.
+func printList(w io.Writer, es []app.Entry, q string) {
 	for _, e := range es {
 		line := firstLine(e.Text, 80)
 		where := location(e)
@@ -517,7 +534,7 @@ func printList(w io.Writer, es []app.Entry) {
 		if e.Status != "inbox" {
 			status = "  (" + e.Status + ")"
 		}
-		fmt.Fprintf(w, "#%-4d %s  %s%s%s\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"), line, where, status)
+		fmt.Fprintf(w, "#%-4d %s  %s%s%s%s\n", e.ID, e.CreatedAt.Local().Format("2006-01-02 15:04"), line, where, status, noteMatch(e, q))
 	}
 }
 
@@ -535,7 +552,7 @@ func printInbox(w io.Writer, es []app.Entry) {
 
 // printSession prints a session's label, a summary line, the given jots, the
 // command to resume it and, if the chat has a link, the command to open it.
-func printSession(w io.Writer, s app.Session, jots []app.Entry) {
+func printSession(w io.Writer, s app.Session, jots []app.Entry, q string) {
 	fmt.Fprintln(w, firstLine(s.LabelText(), 80))
 	latest := s.Latest()
 	parts := []string{s.Source}
@@ -553,7 +570,7 @@ func printSession(w io.Writer, s app.Session, jots []app.Entry) {
 		if e.Status != "inbox" {
 			status = "  (" + e.Status + ")"
 		}
-		fmt.Fprintf(w, "  #%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70), status)
+		fmt.Fprintf(w, "  #%-4d %-6s %s%s%s\n", e.ID, age(e.CreatedAt, now()), firstLine(e.Text, 70), status, noteMatch(e, q))
 	}
 	if cmd := s.ResumeCommand(); cmd != "" {
 		fmt.Fprintln(w, "  "+cmd)
