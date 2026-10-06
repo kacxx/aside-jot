@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/url"
@@ -127,20 +128,44 @@ func defaultDesktopDir() string {
 	return filepath.Join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
 }
 
-// AddOpenURLs sets OpenURL on each entry that has one. It looks Claude
-// Desktop's session files up only if an entry came from there.
-func (s *Service) AddOpenURLs(es []Entry) {
+// AddOpenURLs sets OpenURL on each entry that has one. The link belongs to the
+// jot's session, so it is built from what all the session's jots record (a jot
+// from before the Desktop id was stored still gets its session's link), and
+// every jot of a session gets the same one. It looks Claude Desktop's session
+// files up only if an entry came from there.
+func (s *Service) AddOpenURLs(ctx context.Context, es []Entry) {
+	byKey := map[sessionKey][]Entry{}
+	for _, e := range es {
+		if e.SessionID != "" {
+			byKey[keyOf(e)] = nil
+		}
+	}
+	if len(byKey) > 0 {
+		if all, err := s.store.List(ctx, "", 0); err == nil {
+			for _, e := range all {
+				if _, ok := byKey[keyOf(e)]; ok {
+					byKey[keyOf(e)] = append(byKey[keyOf(e)], e)
+				}
+			}
+		}
+	}
 	refs := make([]linkRef, len(es))
 	for i, e := range es {
-		refs[i] = refFor([]Entry{e})
+		jots := byKey[keyOf(e)]
+		if e.SessionID == "" || len(jots) == 0 {
+			jots = []Entry{e}
+		}
+		sort.Slice(jots, func(a, b int) bool { return jots[a].ID > jots[b].ID }) // newest first
+		refs[i] = refFor(jots)
 	}
 	for i, u := range s.openURLs(refs) {
 		es[i].OpenURL = u
 	}
 }
 
-// addSessionOpenURLs sets OpenURL on each session.
-func (s *Service) addSessionOpenURLs(ss []Session) {
+// AddSessionOpenURLs sets OpenURL on each session. It is separate from Find so
+// callers pay for the lookup only for the sessions they show.
+func (s *Service) AddSessionOpenURLs(ss []Session) {
 	refs := make([]linkRef, len(ss))
 	for i, x := range ss {
 		newestFirst := make([]Entry, len(x.Jots))

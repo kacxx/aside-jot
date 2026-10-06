@@ -204,7 +204,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			return err
 		}
 		one := []app.Entry{e}
-		svc.AddOpenURLs(one)
+		svc.AddOpenURLs(ctx, one)
 		printEntry(stdout, one[0])
 	case "open":
 		id, err := parseID(args)
@@ -228,6 +228,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
+		svc.AddSessionOpenURLs(ss)
 		if len(ss) == 0 && len(loose) == 0 {
 			fmt.Fprintf(stdout, "No jots match %q.\n", q)
 		}
@@ -393,7 +394,7 @@ func cmdOpen(ctx context.Context, svc *app.Service, id int64, w io.Writer) error
 		return err
 	}
 	one := []app.Entry{e}
-	svc.AddOpenURLs(one)
+	svc.AddOpenURLs(ctx, one)
 	u := one[0].OpenURL
 	if u == "" || !app.OpenableURL(u) {
 		msg := fmt.Sprintf("jot #%d has no link to its chat", id)
@@ -500,8 +501,8 @@ func printInbox(w io.Writer, es []app.Entry) {
 	}
 }
 
-// printSession prints a session's label, a summary line, the given jots, and
-// the command to resume it.
+// printSession prints a session's label, a summary line, the given jots, the
+// command to resume it and, if the chat has a link, the command to open it.
 func printSession(w io.Writer, s app.Session, jots []app.Entry) {
 	fmt.Fprintln(w, firstLine(s.LabelText(), 80))
 	latest := s.Latest()
@@ -524,6 +525,9 @@ func printSession(w io.Writer, s app.Session, jots []app.Entry) {
 	}
 	if cmd := s.ResumeCommand(); cmd != "" {
 		fmt.Fprintln(w, "  "+cmd)
+	}
+	if app.OpenableURL(s.OpenURL) {
+		fmt.Fprintf(w, "  aside open %d\n", latest.ID)
 	}
 }
 

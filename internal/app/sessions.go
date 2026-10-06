@@ -131,7 +131,6 @@ func (s *Service) Find(ctx context.Context, q string) ([]Session, []Entry, error
 		}
 	}
 	setStartDirs(found)
-	s.addSessionOpenURLs(found)
 	return found, loose, nil
 }
 
