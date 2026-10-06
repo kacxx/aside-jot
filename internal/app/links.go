@@ -33,7 +33,28 @@ var (
 	cliSessionKey     = regexp.MustCompile(`"cliSessionId"\s*:\s*"([^"\\]*)"`)
 	isArchivedKey     = regexp.MustCompile(`"isArchived"\s*:\s*(true|false)`)
 	desktopEntrypoint = "claude-desktop"
+
+	// The only links aside open will hand to the system.
+	openableClaude = regexp.MustCompile(`^claude://code/continue\?session=local_(?i:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
+	openableCodex  = regexp.MustCompile(`^codex://threads/(?i:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
 )
+
+// OpenableURL reports whether u is a link aside open may open: exactly a
+// Claude Desktop continue link or a Codex thread link, with a UUID id.
+func OpenableURL(u string) bool {
+	return openableClaude.MatchString(u) || openableCodex.MatchString(u)
+}
+
+// ResumeFor returns the command that reopens the session e belongs to, or ""
+// if e has no session or its agent has no resume command.
+func ResumeFor(e Entry) string {
+	ss := groupSessions([]Entry{e})
+	if len(ss) == 0 {
+		return ""
+	}
+	setStartDirs(ss)
+	return ss[0].ResumeCommand()
+}
 
 // headerSize is how much of a Desktop session file is read to find its keys.
 // Both are within the first ~1.1 KB of every file seen; the files are

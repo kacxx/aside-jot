@@ -144,6 +144,11 @@ aside sessions              # your recent chats and their labels
 Only chats with a jot in them can be found, so start a ticket's chat with
 `>> session: SUP-4821 …`.
 
+On a Mac, `aside open 12` opens the chat a jot came from, for jots made in
+Claude Desktop or the Codex app (`aside show 12` prints the link as `open:`,
+and the MCP tools return it as `open_url`). A jot with no link, such as one from
+a terminal `claude` session, gets its resume command instead.
+
 ### Turn a jot into a GitHub issue
 
 ```sh
@@ -182,6 +187,7 @@ little or nothing does.
 | `aside show <id>` | One jot with its context |
 | `aside search <query>` | Search all jots |
 | `aside find <query>` | Chats with a matching jot, and how to resume them |
+| `aside open <id>` | Open the chat a jot came from (macOS; Claude Desktop and Codex app jots) |
 | `aside sessions [-n N]` | Recent chats with their labels (default 10) |
 | `aside done <id>` | Mark a jot done |
 | `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |

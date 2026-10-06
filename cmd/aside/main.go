@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -53,6 +54,7 @@ Usage:
   aside inbox [-n N] [--older D]  list the newest inbox jots (default 20, 0 = all),
                              optionally only those at least D days old
   aside show <id>            show one jot with its context
+  aside open <id>            open the chat a jot came from (macOS; Claude Desktop, Codex app)
   aside search <query...>    search all jots (substring, case-insensitive)
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
@@ -201,6 +203,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		one := []app.Entry{e}
 		svc.AddOpenURLs(one)
 		printEntry(stdout, one[0])
+	case "open":
+		id, err := parseID(args)
+		if err != nil {
+			return err
+		}
+		return cmdOpen(ctx, svc, id, stdout)
 	case "search":
 		q := strings.Join(args, " ")
 		es, err := svc.Search(ctx, q, 0)
@@ -343,6 +351,45 @@ func cmdPromote(ctx context.Context, svc *app.Service, args []string, stdin io.R
 		return nil
 	}
 	fmt.Fprintln(w, p.URL)
+	return nil
+}
+
+// openGOOS and openURL are what aside open runs on; tests replace them.
+var (
+	openGOOS = runtime.GOOS
+	openURL  = func(ctx context.Context, u string) error {
+		return exec.CommandContext(ctx, "open", u).Run()
+	}
+)
+
+// cmdOpen opens the chat a jot came from. The link is rebuilt the way show
+// builds it, and only the two known kinds are passed to the system, so a
+// stored value can't make aside open anything else.
+func cmdOpen(ctx context.Context, svc *app.Service, id int64, w io.Writer) error {
+	e, err := svc.Show(ctx, id)
+	if errors.Is(err, app.ErrNotFound) {
+		return fmt.Errorf("no jot #%d", id)
+	}
+	if err != nil {
+		return err
+	}
+	one := []app.Entry{e}
+	svc.AddOpenURLs(one)
+	u := one[0].OpenURL
+	if u == "" || !app.OpenableURL(u) {
+		msg := fmt.Sprintf("jot #%d has no link to its chat", id)
+		if cmd := app.ResumeFor(e); cmd != "" {
+			msg += "; to reopen it, run: " + cmd
+		}
+		return errors.New(msg)
+	}
+	if openGOOS != "darwin" {
+		return fmt.Errorf("aside open is only supported on macOS; the link is %s", u)
+	}
+	if err := openURL(ctx, u); err != nil {
+		return fmt.Errorf("opening %s: %w", u, err)
+	}
+	fmt.Fprintln(w, "opened", u)
 	return nil
 }
 
