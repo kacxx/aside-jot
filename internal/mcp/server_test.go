@@ -476,8 +476,16 @@ func TestOpenURLInTools(t *testing.T) {
 		t.Errorf("a jot with no session got a link: %s", lines[2])
 	}
 
-	// aside open only works on macOS, so elsewhere the link stays but no
-	// command is offered.
+	// aside open works on Windows too.
+	out.Reset()
+	srv.goos = "windows"
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, " open 1") {
+		t.Errorf("windows: want an open command: %s", got)
+	}
+	// Elsewhere the link stays but no command is offered.
 	out.Reset()
 	srv.goos = "linux"
 	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {

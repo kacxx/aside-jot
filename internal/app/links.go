@@ -119,7 +119,7 @@ type desktopLinks struct {
 }
 
 // SetDesktopSessionsDir sets the directory holding Claude Desktop's session
-// files (<dir>/*/*/local_*.json). The default is macOS's; elsewhere it is
+// files (<dir>/*/*/local_*.json). The default is macOS's or Windows's; elsewhere it is
 // empty and Claude Desktop jots get no link.
 func (s *Service) SetDesktopSessionsDir(dir string) {
 	s.desktop.mu.Lock()
@@ -127,15 +127,29 @@ func (s *Service) SetDesktopSessionsDir(dir string) {
 	s.desktop.dir = dir
 }
 
+// CanOpen reports whether aside open can run on goos: the two systems whose
+// default handler for claude:// and codex:// links has been checked.
+func CanOpen(goos string) bool { return goos == "darwin" || goos == "windows" }
+
 func defaultDesktopDir() string {
-	if runtime.GOOS != "darwin" {
-		return ""
+	switch runtime.GOOS {
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
+	case "windows":
+		// The MSIX build mirrors this folder under
+		// %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming; the Roaming
+		// copy is the one with the same files.
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			return ""
+		}
+		return filepath.Join(appData, "Claude", "claude-code-sessions")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
+	return ""
 }
 
 // AddOpenURLs sets OpenURL on each entry that has one. The link belongs to the

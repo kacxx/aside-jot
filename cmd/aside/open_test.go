@@ -65,7 +65,7 @@ func TestOpenCLI(t *testing.T) {
 	}
 	// Other platforms say so and show the link.
 	openGOOS = "linux"
-	if _, err = do("open", "1"); err == nil || !strings.Contains(err.Error(), "only supported on macOS") || len(opened) != 1 {
+	if _, err = do("open", "1"); err == nil || !strings.Contains(err.Error(), "only supported on macOS and Windows") || len(opened) != 1 {
 		t.Fatalf("linux: %v opened=%v", err, opened)
 	}
 	// A failing opener is reported.
@@ -173,5 +173,21 @@ func TestOpenWithKeepsOutput(t *testing.T) {
 	err := openWith(context.Background(), bin, "codex://threads/x")
 	if err == nil || !strings.Contains(err.Error(), "No application knows how to open URL") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestOpenCommand(t *testing.T) {
+	u := "claude://code/continue?session=local_11111111-1111-4111-8111-111111111111"
+	if bin, args := openCommand("darwin", u); bin != "/usr/bin/open" || len(args) != 1 || args[0] != u {
+		t.Errorf("darwin: %s %v", bin, args)
+	}
+	// Windows hands the link to rundll32 as one argument, so no shell parses it.
+	if bin, args := openCommand("windows", u); bin != "rundll32" || len(args) != 2 || args[0] != "url.dll,FileProtocolHandler" || args[1] != u {
+		t.Errorf("windows: %s %v", bin, args)
+	}
+	for goos, want := range map[string]bool{"darwin": true, "windows": true, "linux": false} {
+		if got := app.CanOpen(goos); got != want {
+			t.Errorf("CanOpen(%q) = %v, want %v", goos, got, want)
+		}
 	}
 }
