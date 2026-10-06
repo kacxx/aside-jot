@@ -178,6 +178,66 @@ doubt means no link.
 documents a link of its own. Windows and Linux Desktop paths are not checked, so
 there is no Desktop link there. Codex CLI-started threads and VS Code are untested.
 
+Lookup time, for a jot whose Desktop session file is gone, on a Mac with 1,399
+session files (Desktop 2.19675.0, measured on aside `f75bc6f`):
+
+| Jot age | Cold cache | Warm |
+| --- | --- | --- |
+| 6 days | 0.69 s | 0.04 s |
+| 60 days | 4.07 s | 0.13 to 0.16 s |
+| Before the scan stopped at the jot's age, any age | about 7 s | 0.18 s |
+
+Jots whose session file exists cost 20 to 50 ms per `aside show`. The saving
+depends on the jot's age: 171 of the files were modified in the last week and
+477 in the last 30 days.
+
+How the link is used was replaced by "Open links are opened with `aside open`,
+not clicked" below.
+
+## Open links are opened with `aside open`, not clicked
+
+**Decided:** `aside open <id>` opens a jot's chat link with `open` on macOS, and
+the MCP tool descriptions tell the agent to offer that command (or run it when
+asked) instead of showing `open_url` as a link. It passes the system only a
+Claude Desktop `continue` link or a Codex thread link, each with a UUID id,
+after rebuilding the link the way `aside show` does, so a stored value can't
+make it open anything else. A jot with no link gets a message and its resume
+command. Other platforms get a message saying it is unsupported.
+
+**Why:** on Desktop 2.19675.0 (macOS, 2026-10-06) clicking `open_url` did not
+open the chat in any form tried: a markdown link, a bare URL and a link in a
+table cell all just selected the text and showed Desktop's "Send to side chat /
+Reply" popover. An earlier hand test had opened the link, so clicking isn't a
+reliable path. Desktop's agent can run shell commands and offers a command
+block with a Run button, so a command works for everyone, without per-user
+settings.
+
+**Not changed:** the MCP server is still read-only. `aside open` is one more
+command an agent with shell access can run, guarded only by its command
+approval, like `aside done`. It changes no jot and only focuses a chat.
+
+**Per session:** the link belongs to the chat, not the jot. It is built from what
+all of the session's jots record, so a jot without the Desktop id (one from
+before it was stored) still opens its session's chat, and `find` can name any
+jot of a session in its command. `find` looks links up only for the sessions it
+shows, after the limit is applied.
+
+**Full path:** agents run it from a shell that may not have aside on its `PATH`
+(on one Mac, `~/go/bin` was on neither a login nor a non-interactive shell's), so
+the MCP tools return `open_command` with the full path to aside, from
+`os.Executable`, next to each `open_url`, and the descriptions tell the agent
+to offer it as given. Off macOS, where `aside open` can't run, no `open_command`
+is offered (`open_url` still is).
+
+**Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
+Desktop jot brought Desktop forward on that jot's own session. Not verified:
+`aside open` for a Codex app jot (the Codex link was only tested on Windows,
+where `aside open` doesn't run).
+
+**Revisit if:** Desktop makes links in chat clickable, or documents a link of
+its own. `aside open` on Windows and Linux isn't built because it hasn't been
+tested there.
+
 ## Promote only creates GitHub issues, on request
 
 **Decided:** `aside promote <id>` creates one GitHub issue through `gh`, only

@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -33,7 +35,35 @@ var (
 	cliSessionKey     = regexp.MustCompile(`"cliSessionId"\s*:\s*"([^"\\]*)"`)
 	isArchivedKey     = regexp.MustCompile(`"isArchived"\s*:\s*(true|false)`)
 	desktopEntrypoint = "claude-desktop"
+
+	// The only links aside open will hand to the system.
+	openableClaude = regexp.MustCompile(`^claude://code/continue\?session=local_(?i:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
+	openableCodex  = regexp.MustCompile(`^codex://threads/(?i:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
 )
+
+// OpenableURL reports whether u is a link aside open may open: exactly a
+// Claude Desktop continue link or a Codex thread link, with a UUID id.
+func OpenableURL(u string) bool {
+	return openableClaude.MatchString(u) || openableCodex.MatchString(u)
+}
+
+// OpenCommand returns the shell command that opens jot id's chat with the
+// aside at exe. Agents run it from a shell that may not have aside on its
+// PATH, so it uses the full path.
+func OpenCommand(exe string, id int64) string {
+	return shellQuote(exe) + " open " + strconv.FormatInt(id, 10)
+}
+
+// ResumeFor returns the command that reopens the session e belongs to, or ""
+// if e has no session or its agent has no resume command.
+func ResumeFor(e Entry) string {
+	ss := groupSessions([]Entry{e})
+	if len(ss) == 0 {
+		return ""
+	}
+	setStartDirs(ss)
+	return ss[0].ResumeCommand()
+}
 
 // headerSize is how much of a Desktop session file is read to find its keys.
 // Both are within the first ~1.1 KB of every file seen; the files are
@@ -98,20 +128,48 @@ func defaultDesktopDir() string {
 	return filepath.Join(home, "Library", "Application Support", "Claude", "claude-code-sessions")
 }
 
-// AddOpenURLs sets OpenURL on each entry that has one. It looks Claude
-// Desktop's session files up only if an entry came from there.
-func (s *Service) AddOpenURLs(es []Entry) {
+// AddOpenURLs sets OpenURL on each entry that has one. The link belongs to the
+// jot's session, so it is built from what all the session's jots record (a jot
+// from before the Desktop id was stored still gets its session's link), and
+// every jot of a session gets the same one. It looks Claude Desktop's session
+// files up only if an entry came from there.
+func (s *Service) AddOpenURLs(ctx context.Context, es []Entry) {
+	byKey := map[sessionKey][]Entry{}
+	var ids []string
+	for _, e := range es {
+		if e.SessionID != "" {
+			if _, ok := byKey[keyOf(e)]; !ok {
+				ids = append(ids, e.SessionID)
+			}
+			byKey[keyOf(e)] = nil
+		}
+	}
+	if len(ids) > 0 {
+		if all, err := s.store.BySessions(ctx, ids); err == nil {
+			for _, e := range all {
+				if _, ok := byKey[keyOf(e)]; ok {
+					byKey[keyOf(e)] = append(byKey[keyOf(e)], e)
+				}
+			}
+		}
+	}
 	refs := make([]linkRef, len(es))
 	for i, e := range es {
-		refs[i] = refFor([]Entry{e})
+		jots := byKey[keyOf(e)]
+		if e.SessionID == "" || len(jots) == 0 {
+			jots = []Entry{e}
+		}
+		sort.Slice(jots, func(a, b int) bool { return jots[a].ID > jots[b].ID }) // newest first
+		refs[i] = refFor(jots)
 	}
 	for i, u := range s.openURLs(refs) {
 		es[i].OpenURL = u
 	}
 }
 
-// addSessionOpenURLs sets OpenURL on each session.
-func (s *Service) addSessionOpenURLs(ss []Session) {
+// AddSessionOpenURLs sets OpenURL on each session. It is separate from Find so
+// callers pay for the lookup only for the sessions they show.
+func (s *Service) AddSessionOpenURLs(ss []Session) {
 	refs := make([]linkRef, len(ss))
 	for i, x := range ss {
 		newestFirst := make([]Entry, len(x.Jots))

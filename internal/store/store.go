@@ -91,6 +91,10 @@ type Entry struct {
 	// OpenURL links to the jot's source chat. It is never stored; the app
 	// layer fills it in for the entries it returns on request.
 	OpenURL string `json:"open_url,omitempty"`
+	// OpenCommand is the shell command that opens OpenURL (aside open <id>),
+	// with the full path to aside. Like OpenURL it is never stored; the MCP
+	// server fills it in.
+	OpenCommand string `json:"open_command,omitempty"`
 }
 
 // MetaIssueURL is the metadata key holding a promoted jot's issue URL.
@@ -336,6 +340,24 @@ func (s *Store) Get(ctx context.Context, id int64) (Entry, error) {
 func (s *Store) List(ctx context.Context, status string, limit int) ([]Entry, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entries
 		WHERE (? = '' OR status = ?) ORDER BY id DESC LIMIT ?`, status, status, limitOrAll(limit))
+	if err != nil {
+		return nil, err
+	}
+	return scan(rows)
+}
+
+// BySessions returns every entry whose session id is one of ids, newest first.
+func (s *Store) BySessions(ctx context.Context, ids []string) ([]Entry, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+columns+` FROM entries
+		WHERE session_id IN (`+marks+`) ORDER BY id DESC`, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -47,7 +47,7 @@ func jotMeta(t *testing.T, svc *Service, source, session string, meta map[string
 
 func openURL(svc *Service, e Entry) string {
 	es := []Entry{e}
-	svc.AddOpenURLs(es)
+	svc.AddOpenURLs(context.Background(), es)
 	return es[0].OpenURL
 }
 
@@ -157,7 +157,11 @@ func TestFindSetsOpenURL(t *testing.T) {
 	svc := sessionService(t)
 	jotMeta(t, svc, "codex", cliA, nil)
 	ss, _, err := svc.Find(ctx, "note")
-	if err != nil || len(ss) != 1 || ss[0].OpenURL != "codex://threads/"+cliA {
+	if err != nil || len(ss) != 1 || ss[0].OpenURL != "" {
+		t.Fatalf("Find should not look links up: %+v %v", ss, err)
+	}
+	svc.AddSessionOpenURLs(ss)
+	if ss[0].OpenURL != "codex://threads/"+cliA {
 		t.Fatalf("%+v %v", ss, err)
 	}
 }
@@ -254,5 +258,56 @@ func TestOpenURLNoDirSkipsTranscript(t *testing.T) {
 	r := refFor([]Entry{jotMeta(t, svc, "claude", cliA, map[string]any{"transcript_path": tr})})
 	if got := svc.openURLs([]linkRef{r}); got[0] != "" {
 		t.Fatalf("got %q", got[0])
+	}
+}
+
+func TestOpenableURL(t *testing.T) {
+	good := []string{
+		"claude://code/continue?session=" + localA,
+		"codex://threads/" + cliA,
+	}
+	bad := []string{
+		"", "https://example.com", "file:///etc/passwd", "claude://resume?session=" + localA,
+		"claude://code/continue?session=" + cliA, // not a local_ id
+		"claude://code/continue?session=" + localA + "&x=1",
+		"claude://code/continue?session=" + localA + "\n",
+		"codex://threads/s1", "codex://threads/" + cliA + "/../x", " codex://threads/" + cliA,
+	}
+	for _, u := range good {
+		if !OpenableURL(u) {
+			t.Errorf("%q should be openable", u)
+		}
+	}
+	for _, u := range bad {
+		if OpenableURL(u) {
+			t.Errorf("%q should not be openable", u)
+		}
+	}
+}
+
+func TestResumeFor(t *testing.T) {
+	if got := ResumeFor(Entry{Source: "codex", SessionID: cliA}); got != "codex resume "+cliA {
+		t.Fatalf("got %q", got)
+	}
+	if got := ResumeFor(Entry{Source: "cli"}); got != "" {
+		t.Fatalf("no session: got %q", got)
+	}
+}
+
+// A jot without the Desktop metadata gets the link its session's other jots
+// record, so every jot of a session has the same link.
+func TestOpenURLUsesWholeSession(t *testing.T) {
+	dir := t.TempDir()
+	svc := sessionService(t)
+	svc.SetDesktopSessionsDir(dir)
+	desktopFile(t, dir, localA, cliA, false, time.Second)
+	older := jotMeta(t, svc, "claude", cliA, map[string]any{"claude_entrypoint": "claude-desktop", "claude_desktop_session_id": localA})
+	newer := jotMeta(t, svc, "claude", cliA, nil)
+	other := jotMeta(t, svc, "claude", cliB, nil) // another session, no metadata
+	want := "claude://code/continue?session=" + localA
+	es := []Entry{older, newer, other}
+	svc.AddOpenURLs(context.Background(), es)
+	if es[0].OpenURL != want || es[1].OpenURL != want || es[2].OpenURL != "" {
+		t.Fatalf("got %q %q %q", es[0].OpenURL, es[1].OpenURL, es[2].OpenURL)
 	}
 }
