@@ -60,7 +60,59 @@ or escape every backslash:
 "command": "C:\\Users\\you\\go\\bin\\aside.exe hook claude"
 ```
 
-## Claude Code hook
+## aside setup
+
+```sh
+aside setup claude [--dry-run] [--mcp]   # ~/.claude/settings.json
+aside setup codex  [--dry-run] [--mcp]   # ~/.codex/hooks.json
+```
+
+It writes the same hooks as the two sections below, so you don't have to edit
+JSON. `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME` move the files, as they do for the
+agents.
+
+- **The binary path** is the one aside was started as, made absolute, with
+  symlinks left alone: a resolved path pins one install and breaks when the
+  tool is upgraded through a symlink. A binary in a temporary directory, such
+  as the one `go run` builds, is refused, since the hook would vanish; run
+  `go install` first. A path with a space is quoted for the shell (single
+  quotes on macOS and Linux, double quotes and forward slashes on Windows).
+- **Merging.** Everything else in the file keeps its order and content. Only
+  whitespace can change (the file is rewritten with two-space indentation).
+  An aside hook already there, including an old `jot hook claude` or
+  `jot hook codex` one, is updated, not duplicated, and any extra aside entries
+  are removed so only one hook runs. An entry that runs this very binary
+  (same path, or the same file through a link) counts as aside's even if the
+  binary has another name, such as `aside-dev`; an entry for a different build
+  under another name isn't recognised, and stays. Running it again with the same binary
+  changes nothing.
+- **Backup.** A changed file is copied to `<file>.bak-<yyyymmdd-hhmmss>` first.
+  A file that isn't valid JSON is left alone and named in the error.
+- **`--dry-run`** prints what would change and the resulting
+  `hooks.UserPromptSubmit` section, and writes nothing. It doesn't print the
+  rest of the file, which can hold `env` values and tokens.
+- **`--mcp`** prints the matching `claude mcp add` or `codex mcp add` command
+  with the same path. It isn't run, because that would change another tool's
+  config.
+- **Codex on Windows** also gets `commandWindows`. On other systems an existing
+  `commandWindows` is left as it is.
+- `aside setup cursor` explains that Cursor isn't supported and writes nothing.
+
+For Codex, the hook still has to be trusted in `/hooks` (see below). The
+command says so after a first install, and says Codex may ask again when it
+changed an existing hook's command. That "may" is deliberate: I haven't
+confirmed in the Codex CLI that a changed command always needs re-trusting.
+
+Setting up Claude Code also turns the hook on in Cursor, which imports it
+([docs/cursor.md](cursor.md)). The command prints that note before it writes.
+No setting to stop Cursor importing it is known, so none is suggested.
+
+Checked on Linux (Go 1.25) with throwaway configs, in the unit tests and in
+`test/e2e/run.sh`. Not yet checked by hand on macOS or Windows, and Codex's
+re-trust after a changed command is as described under Codex below, not
+re-tested against `aside setup`.
+
+## Claude Code hook, by hand
 
 Add to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
 
@@ -96,7 +148,7 @@ Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
   title can be derived from a jot. The conversation model never receives it.
   In the terminal CLI no such request was observed.
 
-## Codex hook
+## Codex hook, by hand
 
 Codex runs local `UserPromptSubmit` hooks. Add to `~/.codex/hooks.json` (or a
 trusted project's `.codex/hooks.json`):

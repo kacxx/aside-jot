@@ -30,41 +30,30 @@ Requires Go 1.25+.
 
 ```sh
 go install github.com/kacxx/aside-jot/cmd/aside@latest
-aside paths    # or "$(go env GOPATH)/bin/aside" paths if it isn't on PATH
+aside setup claude    # or: aside setup codex
 ```
 
-`aside paths` prints where your notes are stored and the binary's full path.
-**Use that full `binary:` path in the configs below**: editors often run hooks
-with a minimal `PATH`.
+`aside setup` adds the `UserPromptSubmit` hook to `~/.claude/settings.json`
+(or `~/.codex/hooks.json`) with the binary's absolute path, since editors often
+run hooks with a minimal `PATH`. It keeps your other settings and hooks, backs
+the file up first (`settings.json.bak-<time>`), and replaces an older aside
+entry instead of adding a second. `--dry-run` shows the result and writes
+nothing; `--mcp` also prints the command that gives the agent read-only access
+to your jots (it doesn't run it). If `aside` isn't on your `PATH` yet, run it as
+`"$(go env GOPATH)/bin/aside" setup claude`.
 
-### Claude Code
-
-Add to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "/Users/you/go/bin/aside hook claude" }] }
-    ]
-  }
-}
+```
+$ aside setup claude
+✓ Added the aside hook in /Users/you/.claude/settings.json
+  command: /Users/you/go/bin/aside hook claude
+  backup:  /Users/you/.claude/settings.json.bak-20261006-065359
+  …
 ```
 
-### Codex
+For **Codex**, run `/hooks` in the **Codex CLI** afterwards and **trust** the
+hook. Until it's trusted, `>>` prompts go to the model.
 
-Add to `~/.codex/hooks.json`, then run `/hooks` in the **Codex CLI** and
-**trust** the hook. Until it's trusted, `>>` prompts go to the model.
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "/Users/you/go/bin/aside hook codex" }] }
-    ]
-  }
-}
-```
+Prefer to edit the JSON yourself? See [docs/setup.md](docs/setup.md).
 
 ### Check it works
 
