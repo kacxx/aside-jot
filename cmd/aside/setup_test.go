@@ -40,6 +40,7 @@ func TestSetupClaude(t *testing.T) {
 	home, bin := setupEnv(t)
 	path := filepath.Join(home, ".claude", "settings.json")
 
+	q := setup.Quote(bin, false)
 	out, err := runSetup(t, "claude", "--dry-run", "--mcp")
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +48,7 @@ func TestSetupClaude(t *testing.T) {
 	if _, err := os.Stat(path); err == nil {
 		t.Fatal("--dry-run wrote the file")
 	}
-	for _, want := range []string{"Dry run", bin + " hook claude", "docs/cursor.md", "claude mcp add --scope user aside -- " + bin + " mcp", "not run"} {
+	for _, want := range []string{"Dry run", q + " hook claude", "docs/cursor.md", "claude mcp add --scope user aside -- " + q + " mcp", "not run"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dry run output lacks %q:\n%s", want, out)
 		}
@@ -58,7 +59,7 @@ func TestSetupClaude(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
-	if !strings.Contains(string(b), bin+" hook claude") {
+	if !strings.Contains(string(b), strings.ReplaceAll(setup.Quote(bin, false), `\`, `\\`)+" hook claude") {
 		t.Fatalf("settings.json:\n%s", b)
 	}
 	if !strings.Contains(out, "Added") || !strings.Contains(out, ">> test") || !strings.Contains(out, "Cursor imports hooks") {
@@ -101,7 +102,7 @@ func TestSetupCodexTrustReminder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Updated", "replaced: " + bin + " hook codex", "trust it", "again", "codex mcp add aside -- " + other + " mcp"} {
+	for _, want := range []string{"Updated", "replaced: " + setup.Quote(bin, false) + " hook codex", "trust it", "again", "codex mcp add aside -- " + setup.Quote(other, false) + " mcp"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("update output lacks %q:\n%s", want, out)
 		}
