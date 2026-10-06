@@ -60,7 +60,7 @@ func cmdSetup(args []string, w io.Writer) error {
 	}
 	windows := setupGOOS == "windows"
 	quoted := setup.Quote(bin, windows)
-	h := setup.Hook{Agent: agent, Command: quoted + " hook " + agent, Windows: windows}
+	h := setup.Hook{Agent: agent, Command: quoted + " hook " + agent, Binary: bin, Windows: windows}
 	res, err := setup.Install(path, h, *dry, now())
 	if err != nil {
 		return err
@@ -86,6 +86,14 @@ func agentName(agent string) string {
 func printSetup(w io.Writer, agent string, h setup.Hook, res setup.Result, dry bool) {
 	ch := res.Change
 	name := agentName(agent)
+	if agent == "claude" && ch.Kind != "unchanged" {
+		// Before the result, so it is read before the file is trusted as done.
+		fmt.Fprintf(w, "Note: Cursor imports hooks from ~/.claude/settings.json, so this also turns aside on in\nCursor, which isn't supported (see %s).\n", cursorDocs)
+		if !dry {
+			fmt.Fprintln(w, "Use --dry-run to preview without writing.")
+		}
+		fmt.Fprintln(w)
+	}
 	switch {
 	case ch.Kind == "unchanged":
 		fmt.Fprintf(w, "✓ %s already has this hook; nothing changed.\n  command: %s\n", res.Path, h.Command)
@@ -114,7 +122,11 @@ func printSetup(w io.Writer, agent string, h setup.Hook, res setup.Result, dry b
 		fmt.Fprintln(w, "  Other settings and key order are kept; only whitespace may differ.")
 	}
 	if dry && ch.Kind != "unchanged" {
-		fmt.Fprintf(w, "\nResulting %s:\n%s", res.Path, res.New)
+		// Only the hook section: the rest of the file may hold env values and
+		// tokens, and this output can end up in an agent's context.
+		if sec, err := setup.Section(res.New); err == nil {
+			fmt.Fprintf(w, "\nResulting hooks.UserPromptSubmit (the rest of the file is unchanged and not shown):\n%s", sec)
+		}
 	}
 
 	fmt.Fprintln(w)
@@ -125,13 +137,12 @@ func printSetup(w io.Writer, agent string, h setup.Hook, res setup.Result, dry b
 			fmt.Fprintln(w, "Codex only runs a hook you have trusted: run /hooks in the Codex CLI (the desktop")
 			fmt.Fprintln(w, "app has no /hooks) and trust it. Until then, >> prompts go to the model.")
 		case "updated":
-			fmt.Fprintln(w, "The hook's definition changed, and Codex won't run a changed hook until you trust it")
-			fmt.Fprintln(w, "again: run /hooks in the Codex CLI and trust it. Until then, >> prompts go to the model.")
+			fmt.Fprintln(w, "The hook's command changed, so Codex may ask you to trust it again: run /hooks in the")
+			fmt.Fprintln(w, "Codex CLI and check. If it isn't trusted, >> prompts go to the model.")
 		}
 		fmt.Fprintln(w, "Then type `>> test` in Codex: you should see ✓ Jotted #N and no model reply.")
 	default:
 		fmt.Fprintf(w, "Next: type `>> test` in %s: you should see ✓ Jotted #N and no model reply.\n", name)
-		fmt.Fprintf(w, "Cursor imports hooks from ~/.claude/settings.json, so this also turns aside on in\nCursor, which isn't supported (see %s).\n", cursorDocs)
 	}
 }
 

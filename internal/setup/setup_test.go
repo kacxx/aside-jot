@@ -379,3 +379,54 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
+func TestMergeRecognisesOwnBinaryUnderAnyName(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "aside53")
+	must(t, os.WriteFile(bin, []byte("x"), 0o755))
+	h := Hook{Agent: "claude", Command: Quote(bin, false) + " hook claude", Binary: bin}
+	cfg := "{}"
+	for i := 0; i < 3; i++ {
+		got, ch := merge(t, cfg, h)
+		want := map[int]string{0: "added", 1: "unchanged", 2: "unchanged"}[i]
+		if ch.Kind != want || strings.Count(got, "hook claude") != 1 {
+			t.Fatalf("run %d: %+v\n%s", i, ch, got)
+		}
+		cfg = got
+	}
+	// Another name for the same file is the same binary, too.
+	link := filepath.Join(dir, "aside-link")
+	if err := os.Link(bin, link); err != nil {
+		t.Skip("hard links unavailable:", err)
+	}
+	h2 := Hook{Agent: "claude", Command: Quote(link, false) + " hook claude", Binary: link}
+	got, ch := merge(t, cfg, h2)
+	if ch.Kind != "updated" || strings.Count(got, "hook claude") != 1 {
+		t.Fatalf("%+v\n%s", ch, got)
+	}
+}
+
+func TestMergeKeepsGroupWithOtherKeys(t *testing.T) {
+	in := `{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"/x/aside hook claude"},{"type":"command","command":"/y/aside hook claude"}],"note":"mine"}]}}`
+	got, ch := merge(t, in, claude)
+	if ch.Removed != 1 || !strings.Contains(got, `"note": "mine"`) {
+		t.Errorf("%+v\n%s", ch, got)
+	}
+	// Emptied by removal: the group goes only if nothing else is in it.
+	in = `{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"/y/aside hook claude"}],"note":"mine"},{"matcher":"","hooks":[{"type":"command","command":"/x/aside hook claude"}]}]}}`
+	got, _ = merge(t, in, claude)
+	if !strings.Contains(got, `"note": "mine"`) {
+		t.Errorf("group with another key was dropped:\n%s", got)
+	}
+}
+
+func TestSectionShowsOnlyHooks(t *testing.T) {
+	out, _ := merge(t, `{"env":{"API_KEY":"secret"},"hooks":{"Stop":[],"UserPromptSubmit":[]}}`, claude)
+	sec, err := Section([]byte(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(sec), "secret") || strings.Contains(string(sec), "Stop") || !strings.Contains(string(sec), "aside hook claude") {
+		t.Errorf("section:\n%s", sec)
+	}
+}
