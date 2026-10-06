@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -70,5 +73,79 @@ func TestOpenCLI(t *testing.T) {
 	openURL = func(context.Context, string) error { return errors.New("boom") }
 	if _, err = do("open", "1"); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("open failure: %v", err)
+	}
+}
+
+// A Claude Desktop jot goes through aside open to its continue link, and an
+// archived session gets none.
+func TestOpenCLIDesktop(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	const (
+		cli      = "11111111-1111-4111-8111-111111111111"
+		cliGone  = "22222222-2222-4222-8222-222222222222"
+		local    = "local_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+		localOld = "local_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	)
+	dir := t.TempDir()
+	for _, f := range []struct {
+		local, cli string
+		archived   bool
+	}{{local, cli, false}, {localOld, cliGone, true}} {
+		d := filepath.Join(dir, "a", "b")
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := fmt.Sprintf(`{"sessionId":%q,"cliSessionId":%q,"isArchived":%v}`, f.local, f.cli, f.archived)
+		if err := os.WriteFile(filepath.Join(d, f.local+".json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldDir, oldOS, oldOpen := desktopSessionsDir, openGOOS, openURL
+	t.Cleanup(func() { desktopSessionsDir, openGOOS, openURL = oldDir, oldOS, oldOpen })
+	desktopSessionsDir, openGOOS = dir, "darwin"
+	var opened []string
+	openURL = func(_ context.Context, u string) error { opened = append(opened, u); return nil }
+
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta := map[string]any{"claude_entrypoint": "claude-desktop", "claude_desktop_session_id": local}
+	for _, req := range []app.CaptureRequest{
+		{Text: "desktop jot", Source: "claude", SessionID: cli, Metadata: meta},
+		{Text: "archived jot", Source: "claude", SessionID: cliGone, Metadata: map[string]any{"claude_entrypoint": "claude-desktop"}},
+	} {
+		if _, err := svc.Capture(context.Background(), req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc.Close()
+
+	var out bytes.Buffer
+	if err := run([]string{"open", "1"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	want := "claude://code/continue?session=" + local
+	if out.String() != "opened "+want+"\n" || len(opened) != 1 || opened[0] != want {
+		t.Fatalf("out=%q opened=%v", out.String(), opened)
+	}
+	if err := run([]string{"open", "2"}, strings.NewReader(""), &out); err == nil || !strings.Contains(err.Error(), "no link") || len(opened) != 1 {
+		t.Fatalf("archived: %v opened=%v", err, opened)
+	}
+}
+
+// A failing open reports what it printed.
+func TestOpenWithKeepsOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a shell script")
+	}
+	bin := filepath.Join(t.TempDir(), "open")
+	script := "#!/bin/sh\necho 'No application knows how to open URL' >&2\nexit 1\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err := openWith(context.Background(), bin, "codex://threads/x")
+	if err == nil || !strings.Contains(err.Error(), "No application knows how to open URL") {
+		t.Fatalf("got %v", err)
 	}
 }
