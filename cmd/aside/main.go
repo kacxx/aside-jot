@@ -54,7 +54,7 @@ Usage:
   aside inbox [-n N] [--older D]  list the newest inbox jots (default 20, 0 = all),
                              optionally only those at least D days old
   aside show <id>            show one jot with its context
-  aside open <id>            open the chat a jot came from (macOS; Claude Desktop, Codex app)
+  aside open <id>            open the chat a jot came from (macOS, Windows; Claude Desktop, Codex app)
   aside search <query...>    search all jots (substring, case-insensitive)
   aside find <query...>      sessions with a jot matching the query, and how to resume them
   aside sessions [-n N]      recent sessions with their label (default 10, 0 = all)
@@ -408,14 +408,27 @@ var desktopSessionsDir string
 var (
 	openGOOS = runtime.GOOS
 	openURL  = func(ctx context.Context, u string) error {
-		return openWith(ctx, "/usr/bin/open", u)
+		bin, args := openCommand(openGOOS, u)
+		return openWith(ctx, bin, args...)
 	}
 )
 
-// openWith runs bin on u, and keeps what it printed if it fails: open says
-// why, for example that no application handles the link's scheme.
-func openWith(ctx context.Context, bin, u string) error {
-	out, err := exec.CommandContext(ctx, bin, u).CombinedOutput()
+// openCommand is the program and arguments that hand u to the system's
+// default handler for its scheme. u has already been checked by
+// app.OpenableURL, so it holds only a scheme, a UUID and a few fixed
+// characters. On Windows it goes to rundll32 so no shell parses it; rundll32
+// reports no failure, so a link nothing handles prints "opened" there anyway.
+func openCommand(goos, u string) (string, []string) {
+	if goos == "windows" {
+		return "rundll32", []string{"url.dll,FileProtocolHandler", u}
+	}
+	return "/usr/bin/open", []string{u}
+}
+
+// openWith runs bin with args, and keeps what it printed if it fails: open
+// says why, for example that no application handles the link's scheme.
+func openWith(ctx context.Context, bin string, args ...string) error {
+	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return fmt.Errorf("%w: %s", err, msg)
@@ -445,8 +458,8 @@ func cmdOpen(ctx context.Context, svc *app.Service, id int64, w io.Writer) error
 		}
 		return errors.New(msg)
 	}
-	if openGOOS != "darwin" {
-		return fmt.Errorf("aside open is only supported on macOS; the link is %s", u)
+	if !app.CanOpen(openGOOS) {
+		return fmt.Errorf("aside open is only supported on macOS and Windows; the link is %s", u)
 	}
 	if err := openURL(ctx, u); err != nil {
 		return fmt.Errorf("opening %s: %w", u, err)
