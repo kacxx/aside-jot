@@ -232,7 +232,11 @@ is offered (`open_url` still is).
 **Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
 Desktop jot brought Desktop forward on that jot's own session. Not verified:
 `aside open` for a Codex app jot (the Codex link was only tested on Windows,
-where `aside open` doesn't run).
+where `aside open` doesn't run). Run by a Codex CLI v0.160.1 agent on that Mac
+(2026-10-07), `aside open` failed with "No application knows how to open URL",
+while the same command in a plain Terminal worked, so an agent's shell can be
+unable to open links even when the user's can; the Codex sandbox is the likely
+cause, unconfirmed.
 
 **Windows:** Desktop 2.19675.1 on Windows 10 (build 19045, 2026-10-07) keeps its
 session files in `%APPDATA%\Claude\claude-code-sessions\<account>\<org>\local_<uuid>.json`
