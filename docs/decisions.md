@@ -233,7 +233,7 @@ is offered (`open_url` still is).
 Desktop jot brought Desktop forward on that jot's own session. Not verified:
 `aside open` for a Codex app jot (the Codex link was only tested on Windows,
 where `aside open` doesn't run). Run by a Codex CLI v0.160.1 agent on that Mac
-(2026-10-07), `aside open` failed with "No application knows how to open URL",
+(2026-10-07), `aside open` failed with "No application knows how to open URL … kLSExecutableIncorrectFormat",
 while the same command in a plain Terminal worked, so an agent's shell can be
 unable to open links even when the user's can; the Codex sandbox is the likely
 cause, unconfirmed.
