@@ -68,6 +68,11 @@ func TestOpenCLI(t *testing.T) {
 	if _, err = do("open", "1"); err == nil || !strings.Contains(err.Error(), "only supported on macOS and Windows") || len(opened) != 1 {
 		t.Fatalf("linux: %v opened=%v", err, opened)
 	}
+	// Windows offers no Codex link: nothing opened, the resume command shown.
+	openGOOS = "windows"
+	if _, err = do("open", "1"); err == nil || !strings.Contains(err.Error(), "no link") || !strings.Contains(err.Error(), "codex resume "+thread) || len(opened) != 1 {
+		t.Fatalf("windows codex: %v opened=%v", err, opened)
+	}
 	// A failing opener is reported.
 	openGOOS = "darwin"
 	openURL = func(context.Context, string) error { return errors.New("boom") }
