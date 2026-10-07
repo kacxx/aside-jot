@@ -108,6 +108,13 @@ records the results for the initial version.
 ## Working agreements
 
 - Changes go through a PR on a branch, with tests. CI must be green.
+- Releases come from release-please: it reads conventional commit messages
+  on `main` and keeps a release PR open. Merging that PR tags the release.
+  Only `feat:`, `fix:` and breaking (`feat!:`) commits make a release; `docs:`,
+  `ci:` and `chore:` commits appear in no release on their own. Commits
+  without a prefix are ignored. The repo squashes with the commit message
+  (single-commit PRs) or the PR title (several commits), so put the prefix on
+  the commit message itself, and on the PR title too.
 - After a feature merges, test it by hand: hook payloads into a throwaway
   database, then the real database read-only. Check printed commands against
   the files they point at.
