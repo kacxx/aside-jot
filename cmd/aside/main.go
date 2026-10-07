@@ -147,6 +147,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return err
 	}
 	defer svc.Close()
+	svc.SetGOOS(openGOOS)
 	if desktopSessionsDir != "" {
 		svc.SetDesktopSessionsDir(desktopSessionsDir)
 	}

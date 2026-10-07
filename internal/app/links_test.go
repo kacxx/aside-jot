@@ -51,6 +51,18 @@ func openURL(svc *Service, e Entry) string {
 	return es[0].OpenURL
 }
 
+func TestOpenURLCodexWindows(t *testing.T) {
+	svc := sessionService(t)
+	svc.SetGOOS("windows")
+	if got := openURL(svc, jotMeta(t, svc, "codex", cliA, nil)); got != "" {
+		t.Fatalf("no Codex link on Windows, got %q", got)
+	}
+	svc.SetGOOS("linux")
+	if got := openURL(svc, jotMeta(t, svc, "codex", cliA, nil)); got != "codex://threads/"+cliA {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestOpenURLCodex(t *testing.T) {
 	svc := sessionService(t)
 	if got := openURL(svc, jotMeta(t, svc, "codex", cliA, nil)); got != "codex://threads/"+cliA {
