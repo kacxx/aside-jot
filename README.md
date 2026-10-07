@@ -140,7 +140,8 @@ Claude Desktop (checked on Desktop 2.19675.0). When a chat has such a link,
 `aside find` prints the command under its resume command, as above. `aside show 12` prints the link as
 `open:`, and the MCP tools return it as `open_url` with an `open_command`. Codex
 app jots get a link too, except on Windows, where it didn't open the Codex app
-(checked 2026-10-07), so aside offers the resume command instead. Codex links
+in the latest check (2026-10-07; an earlier one worked), so aside offers the
+resume command instead. Codex links
 haven't been tried on a Mac. A jot with no link, such as one from a terminal
 `claude` session, gets its resume command instead.
 

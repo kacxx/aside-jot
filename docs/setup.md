@@ -277,10 +277,13 @@ for Claude Desktop jots only (macOS, and Windows 10 build 19045 with Desktop
 app handles the link). On Windows 10 build 19045 with aside from `main`
 (2026-10-07), `aside open` for a Codex app jot printed "opened codex://threads/…" but the Codex app
 didn't come forward, and `Start-Process "codex://threads/<id>"` from a plain
-PowerShell window did nothing either, with no error. So aside offers no Codex
-link on Windows (no `open_url`, `open:` or `open_command`), and `aside open` prints the
-resume command instead. They haven't been
-tested on a Mac, and threads started in the Codex CLI are untested.
+PowerShell window did nothing either, with no error. An earlier check
+(2026-10-05, Codex app 26.930.31730) had switched the app to the right thread,
+so the cause isn't settled (see "Open links are opened with `aside open`" in
+docs/decisions.md). Until it is, aside offers no Codex link on Windows (no
+`open_url`, `open:` or `open_command`), and `aside open` prints the resume
+command instead. Codex links haven't been tried on macOS or Linux, and threads
+started in the Codex CLI are untested.
 
 An agent inside Codex may not be able to run `aside open`. With Codex CLI
 v0.160.1 on macOS (aside built from `main`, 2026-10-07), the agent read

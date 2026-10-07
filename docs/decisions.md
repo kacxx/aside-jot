@@ -231,14 +231,23 @@ is offered (`open_url` still is).
 
 **Verified:** on a Mac with Claude Desktop 2.19675.0, `aside open <id>` for a
 Desktop jot brought Desktop forward on that jot's own session. Not verified:
-`aside open` for a Codex app jot on a Mac. On Windows 10 (build 19045,
-2026-10-07) the Codex app did not come forward for `aside open` or for
-`Start-Process "codex://threads/<id>"` in plain PowerShell, so aside offers no
-Codex link on Windows and shows the resume command instead. Run by a Codex CLI v0.160.1 agent on that Mac
-(2026-10-07), `aside open` failed with "No application knows how to open URL … kLSExecutableIncorrectFormat",
-while the same command in a plain Terminal worked, so an agent's shell can be
-unable to open links even when the user's can; the Codex sandbox is the likely
-cause, unconfirmed.
+`aside open` for a Codex app jot on a Mac. Run by a Codex CLI v0.160.1 agent on
+the Mac (2026-10-07), `aside open` failed with "No application knows how to open
+URL … kLSExecutableIncorrectFormat", while the same command in a plain Terminal
+worked, so an agent's shell can be unable to open links even when the user's
+can; the Codex sandbox is the likely cause, unconfirmed.
+
+**Codex links on Windows:** the two results disagree. On 2026-10-05, with Codex
+app 26.930.31730 (build 12947), opening `codex://threads/<id>` from a different
+chat switched the app to the right thread (#44). On Windows 10 (build 19045,
+2026-10-07, Codex app version not recorded), the app did not come forward for
+`aside open` or for `Start-Process "codex://threads/<id>"` in plain PowerShell.
+Two causes weren't ruled out: the Codex app may not open a thread created while
+it was running until it restarts, and Windows may not let an app launched from
+a background process take the foreground, so the thread could have changed
+behind the window. aside offers no Codex link on Windows, because the latest
+result failed and `codex resume <id>` always works. Codex links are still
+offered on macOS and Linux, where they haven't been tried.
 
 **Windows:** Desktop 2.19675.1 on Windows 10 (build 19045, 2026-10-07) keeps its
 session files in `%APPDATA%\Claude\claude-code-sessions\<account>\<org>\local_<uuid>.json`
@@ -255,7 +264,9 @@ why no Desktop jot had the id.
 
 **Revisit if:** Desktop makes links in chat clickable, or documents a link of
 its own. `aside open` on Linux isn't built: there is no Claude Desktop for it that
-we know of.
+we know of. For Codex on Windows: if `codex://threads/<id>` opens the thread
+again, after restarting the app or by checking inside the app with the window
+in the background, with the app version recorded, offer the link again.
 
 ## Promote only creates GitHub issues, on request
 
