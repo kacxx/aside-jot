@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,11 +31,14 @@ type Service struct {
 	now   func() time.Time
 	// desktop finds Claude Desktop's session files, for open links.
 	desktop desktopLinks
+	// goos is the system links are built for, which decides whether Codex
+	// thread links are offered (see codexLinks).
+	goos string
 }
 
 // New wraps an open store.
 func New(st *store.Store) *Service {
-	return &Service{store: st, git: gitctx.Detect, now: time.Now, desktop: desktopLinks{dir: defaultDesktopDir()}}
+	return &Service{store: st, git: gitctx.Detect, now: time.Now, desktop: desktopLinks{dir: defaultDesktopDir()}, goos: runtime.GOOS}
 }
 
 // Open opens the database at path.

@@ -440,6 +440,7 @@ func TestOpenURLInTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer svc.Close()
+	svc.SetGOOS("darwin")
 	const id = "11111111-1111-4111-8111-111111111111"
 	for _, req := range []app.CaptureRequest{
 		{Text: "from codex", Source: "codex", SessionID: id},

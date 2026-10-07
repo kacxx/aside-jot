@@ -127,6 +127,14 @@ func (s *Service) SetDesktopSessionsDir(dir string) {
 	s.desktop.dir = dir
 }
 
+// SetGOOS sets the system links are built for; the default is the running one.
+func (s *Service) SetGOOS(goos string) { s.goos = goos }
+
+// codexLinks reports whether codex:// links are offered. On Windows 10 neither
+// aside open nor Start-Process opened the Codex app with one (2026-10-07), so
+// Codex jots there get their resume command only.
+func (s *Service) codexLinks() bool { return s.goos != "windows" }
+
 // CanOpen reports whether aside open can run on goos: the two systems whose
 // default handler for claude:// and codex:// links has been checked.
 func CanOpen(goos string) bool { return goos == "darwin" || goos == "windows" }
@@ -247,7 +255,7 @@ func (s *Service) openURLs(refs []linkRef) []string {
 	for i, r := range refs {
 		switch {
 		case !uuidShape.MatchString(r.sessionID):
-		case r.source == "codex":
+		case r.source == "codex" && s.codexLinks():
 			out[i] = "codex://threads/" + url.PathEscape(r.sessionID)
 		case r.source == "claude" && hasDir && claudeEntrypoint(r) == desktopEntrypoint:
 			w := wants[r.sessionID]

@@ -17,6 +17,7 @@ func sessionService(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { svc.Close() })
+	svc.SetGOOS("darwin") // Codex links are not offered on Windows
 	svc.git = func(context.Context, string) gitctx.Info { return gitctx.Info{} }
 	return svc
 }

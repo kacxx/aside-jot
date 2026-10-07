@@ -233,8 +233,8 @@ is offered (`open_url` still is).
 Desktop jot brought Desktop forward on that jot's own session. Not verified:
 `aside open` for a Codex app jot on a Mac. On Windows 10 (build 19045,
 2026-10-07) the Codex app did not come forward for `aside open` or for
-`Start-Process "codex://threads/<id>"` in plain PowerShell, so the link isn't
-usable there (aside still prints "opened", as it does for any unhandled link). Run by a Codex CLI v0.160.1 agent on that Mac
+`Start-Process "codex://threads/<id>"` in plain PowerShell, so aside offers no
+Codex link on Windows and shows the resume command instead. Run by a Codex CLI v0.160.1 agent on that Mac
 (2026-10-07), `aside open` failed with "No application knows how to open URL … kLSExecutableIncorrectFormat",
 while the same command in a plain Terminal worked, so an agent's shell can be
 unable to open links even when the user's can; the Codex sandbox is the likely
