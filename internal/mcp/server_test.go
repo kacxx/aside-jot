@@ -580,10 +580,15 @@ func TestSessionsTool(t *testing.T) {
 		{Text: "second in s1", Source: "codex", SessionID: "s1", Cwd: "/work"},
 		{Text: "in s2", Source: "codex", SessionID: "s2"},
 		{Text: "no session", Source: "cli"},
+		{Text: "done in s3", Source: "codex", SessionID: "s3"},
 	} {
 		if _, err := svc.Capture(ctx, req); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// A session whose only jot is done is still listed, as the description says.
+	if err := svc.Done(ctx, 5); err != nil {
+		t.Fatal(err)
 	}
 	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sessions","arguments":{}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sessions","arguments":{"limit":1}}}`
@@ -608,15 +613,20 @@ func TestSessionsTool(t *testing.T) {
 		t.Fatal(err)
 	}
 	ss := r.Result.StructuredContent.Sessions
-	if len(ss) != 2 {
-		t.Fatalf("sessions should list the two sessions, not the jot without one: %s", lines[0])
+	if len(ss) != 3 {
+		t.Fatalf("sessions should list the three sessions, not the jot without one: %s", lines[0])
 	}
 	var s1 int
 	for _, s := range ss {
-		if s.SessionID == "s1" {
+		switch s.SessionID {
+		case "s1":
 			s1 = s.JotCount
 			if s.LatestJot.Text != "second in s1" || s.ResumeCommand != "codex resume s1" {
 				t.Errorf("s1: %+v", s)
+			}
+		case "s3":
+			if s.JotCount != 1 || s.LatestJot.Status != "done" {
+				t.Errorf("s3 (all done): %+v", s)
 			}
 		}
 	}

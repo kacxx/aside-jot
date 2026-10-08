@@ -336,10 +336,14 @@ var tools = []map[string]any{
 	{
 		"name": "sessions",
 		"description": "List the agent sessions (Claude Code, Codex) that have jots, most recently active first, " +
-			"for questions like \"what was I working on last?\". Each session has its repo and branch, its newest jot, " +
-			"jot_count, resume_command to reopen it (the user runs it; this tool doesn't), and open_url and " +
-			"open_command as in find. Jots without a session, such as those from aside add, are not listed. " +
-			"limit caps the sessions.",
+			"for questions like \"what was I working on last?\". Each session has its repo and branch, latest_jot, " +
+			"jot_count and resume_command to reopen it (the user runs it; this tool doesn't). Done jots count too: " +
+			"jot_count includes them, latest_jot may be one (see its status), and a session whose jots are all done " +
+			"is still listed; use inbox for open jots. open_url, when set, is a link to the chat (Claude Desktop, " +
+			"Codex app) and open_command is the command that opens it: don't show open_url as a link, since " +
+			"clicking it doesn't open the chat in Claude Desktop; offer the user open_command exactly as given, or " +
+			"run it when they ask to open the chat. If they are not set, use resume_command. Jots without a " +
+			"session, such as those from aside add, are not listed. limit caps the sessions.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -78,9 +78,8 @@ example, `aside done` taking several ids) over giving the server write access.
 **Revisit if:** there's a write that's safe to do without asking, or a
 confirmation step the agent can't bypass.
 
-Later addition (2026-10-08): `sessions` and an `older_than_days` argument on
-`inbox` were added. They read the same data as `aside sessions` and
-`aside inbox --older`, so the server is still read-only.
+The tool list grew in
+[MCP sessions and older_than_days stay read-only](#mcp-sessions-and-older_than_days-stay-read-only).
 
 What "read-only" guarantees was narrowed by
 [Read-only covers the MCP server, not the agent](#read-only-covers-the-mcp-server-not-the-agent).
@@ -312,3 +311,18 @@ against.
 
 **Revisit when:** an agent offers an install or registration command of its
 own that aside can call safely.
+
+## MCP sessions and older_than_days stay read-only
+
+**Decided:** the MCP server gains a `sessions` tool and an `older_than_days`
+argument on `inbox` (2026-10-08). Both read what `aside sessions` and
+`aside inbox --older` already show, so the server is still read-only. There is
+still no capture tool, and the docs tell users to jot with `>> ` rather than
+ask the agent to run `aside add`.
+
+**Why:** without them an agent couldn't answer "what was I working on?" or
+"anything older than a week?" except by running the CLI. Asking an agent to "jot this" sends the note
+through the model, which is what a `>> ` jot exists to avoid.
+
+**Revisit if:** an agent needs a write the CLI can't do; see
+[The MCP server is read-only](#the-mcp-server-is-read-only).
