@@ -19,10 +19,10 @@ keep working.
 Works with **Claude Code** and **Codex**. Not Cursor: it sends a blocked prompt
 to the model with your next message ([why](docs/cursor.md)).
 
-![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "jot done" clears it](docs/demo.gif)
+![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "aside done" clears it](docs/demo.gif)
 
-*Recorded with the real Claude Code CLI before the command was renamed from
-`jot` to `aside`.*
+*Recorded with the real Claude Code CLI (v2.1.294) and aside v0.1.0.
+[`docs/demo/record.sh`](docs/demo/record.sh) re-records it.*
 
 ## Install
 
