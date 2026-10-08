@@ -239,16 +239,33 @@ const maxLimit = 200
 // broad query can't return every jot of every session.
 const maxSessionMatches = 5
 
-// openNote is how the tools describe open_url. Claude Desktop doesn't open a
-// link in a chat when it is clicked, so the agent offers a command instead,
-// with the full path to aside because its shell may not have aside on PATH.
 // doneToken stands in for the aside done command in tool descriptions; the
 // server fills in the full path to aside, which the agent's shell may not
 // have on its PATH.
 const doneToken = "{{DONE_COMMAND}}"
 
 const doneNote = "The server is read-only: when the user asks you to close jots, run `" + doneToken + "` " +
-	"from the shell (several ids at once; --note records why, shown as done_note). "
+	"from the shell yourself (several ids at once; --note records why, shown as done_note). If you show " +
+	"the user this command, copy it exactly, including the full path. "
+
+// quoteNote keeps agents from rewording jots, which can drop a ticket key, an
+// exact error message or a leading route.
+const quoteNote = "Quote each jot's text exactly as stored: don't reword, summarise or recapitalise it. "
+
+// openNote is how the tools describe open_url. Claude Desktop doesn't open a
+// link in a chat when it is clicked, so the agent runs or offers a command
+// instead, with the full path to aside because the shell may not have aside
+// on PATH. Running it can fail inside an agent sandbox (Codex CLI on macOS),
+// so the agent falls back to giving the user the command. fallback says what
+// to use when a jot's chat has no link.
+func openNote(fallback string) string {
+	return "open_url, when set, is a link to the chat the jot came from (Claude Desktop, Codex app), " +
+		"and open_command is the command that opens it. Don't show open_url as a link: clicking it doesn't open " +
+		"the chat in Claude Desktop. Offer to open the chat yourself, and run open_command when the user asks. " +
+		"If you show a command, or running it fails, give the user that entry's open_command exactly as given, " +
+		"including the full path, to run in their own terminal; don't write a generic `aside open <id>`, since " +
+		"aside may not be on their PATH. If open_url and open_command are not set, " + fallback
+}
 
 // toolList returns tools with the done command filled in.
 func (s *Server) toolList() []map[string]any {
@@ -267,15 +284,14 @@ func (s *Server) toolList() []map[string]any {
 	return out
 }
 
-const openNote = "open_url, when set, is a link to the chat the jot came from (Claude Desktop, Codex app), " +
-	"and open_command is the command that opens it. Don't show open_url as a link: clicking it doesn't open " +
-	"the chat in Claude Desktop. Offer the user open_command exactly as given, or run it when they ask to " +
-	"open the jot's chat. If they are not set, the chat has no link; its resume command is in find."
+var jotOpenNote = openNote("the chat has no link; its resume command is in find.")
+
+var sessionOpenNote = openNote("use resume_command. ")
 
 var tools = []map[string]any{
 	{
 		"name":        "inbox",
-		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today). " + doneNote + openNote,
+		"description": "List the newest jots still in the user's inbox (not marked done). Each entry has age_days, whole calendar days since it was jotted (0 = today). " + quoteNote + doneNote + jotOpenNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -289,7 +305,7 @@ var tools = []map[string]any{
 	{
 		"name": "show",
 		"description": "Show one jot by id, including its git context and metadata. issue_url is set " +
-			"when the user has promoted the jot to an issue; done_note is why it was closed, if they said. " + doneNote + openNote,
+			"when the user has promoted the jot to an issue; done_note is why it was closed, if they said. " + quoteNote + doneNote + jotOpenNote,
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
@@ -299,7 +315,7 @@ var tools = []map[string]any{
 	},
 	{
 		"name":        "search",
-		"description": "Search all jots (inbox and done) for a substring, newest first. " + openNote,
+		"description": "Search all jots (inbox and done) for a substring, newest first. " + quoteNote + doneNote + jotOpenNote,
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -315,12 +331,8 @@ var tools = []map[string]any{
 		"description": "Find the agent sessions (Claude Code, Codex) where the user jotted about something, " +
 			"for questions like \"where did I work on SUP-4821?\". A ticket key such as SUP-4821 matches as a " +
 			"whole word; anything else is a substring. Each session has the matching jots, its repo and " +
-			"branch, resume_command to reopen it (the user runs it; this tool doesn't). open_url, when set, is a link " +
-			"to the chat (Claude Desktop, Codex app) and open_command is the command that opens it: don't show " +
-			"open_url as a link, since clicking it doesn't open the chat in Claude Desktop; offer the user " +
-			"open_command exactly as given, or run it when they ask to open the chat. If they are not set, use " +
-			"resume_command. Only chats with " +
-			"a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
+			"branch, resume_command to reopen it (the user runs it; this tool doesn't). " + quoteNote +
+			sessionOpenNote + "Only chats with a jot in them are found. limit caps the sessions and the jots not in a session, most recent first; " +
 			"total_sessions and total_not_in_a_session are the counts before the cut. Each session lists its " +
 			fmt.Sprint(maxSessionMatches) + " newest matching jots (oldest first), and match_count is how many matched.",
 		"inputSchema": map[string]any{
@@ -339,11 +351,7 @@ var tools = []map[string]any{
 			"for questions like \"what was I working on last?\". Each session has its repo and branch, latest_jot, " +
 			"jot_count and resume_command to reopen it (the user runs it; this tool doesn't). Done jots count too: " +
 			"jot_count includes them, latest_jot may be one (see its status), and a session whose jots are all done " +
-			"is still listed; use inbox for open jots. open_url, when set, is a link to the chat (Claude Desktop, " +
-			"Codex app) and open_command is the command that opens it: don't show open_url as a link, since " +
-			"clicking it doesn't open the chat in Claude Desktop; offer the user open_command exactly as given, or " +
-			"run it when they ask to open the chat. If they are not set, use resume_command. Jots without a " +
-			"session, such as those from aside add, are not listed. limit caps the sessions.",
+			"is still listed; use inbox for open jots. " + quoteNote + sessionOpenNote + "Jots without a session, such as those from aside add, are not listed. limit caps the sessions.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
