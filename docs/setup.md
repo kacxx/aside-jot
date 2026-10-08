@@ -250,15 +250,42 @@ for example: "My side notes are in the `aside` MCP server; check `inbox` when
 starting work on this repo."
 
 Tools: `inbox`, `show`, `search`, `find` (the same lookup as `aside find`,
-with the resume command to show you, not run). `inbox`, `search` and `find`
-take a `limit` (default 20, at most 200). `find` also returns the totals
+with the resume command to show you, not run) and `sessions` (the same list as
+`aside sessions`: each session's repo, branch, newest jot, `jot_count` and
+resume command). `inbox`, `search`, `find` and `sessions` take a `limit`
+(default 20, at most 200). `inbox` also takes `older_than_days`, the same
+filter as `aside inbox --older`. `find` also returns the totals
 before the cut, and lists each session's 5 newest matching jots with a
 `match_count`. There is intentionally **no capture tool**:
 only you write jots, never the model. `inbox` entries carry `age_days`
 (calendar days since the jot, local time; 0 = today). Likewise there is no promote tool: only
 you turn jots into issues. `show` returns a promoted jot's `issue_url`.
 
-`inbox`, `show`, `search` and `find` also return `open_url`, a link to the chat a jot
+### Talking to your agent
+
+Once the server is added, you can ask in plain words and the agent calls the
+tool: "show my inbox", "what's jot 7?", "any jots older than a week?", "where
+did I work on SUP-4821?", "which sessions have jots?".
+
+The server only reads. To have the agent write, it uses the shell, which is
+the same `aside` command you would type, so it works only where the agent can
+run commands:
+
+| You say | The agent runs |
+| --- | --- |
+| "jot this: check the retry logic" | `aside add "check the retry logic"` |
+| "close jot 5, shipped in the last PR" | `aside done 5 --note "shipped in the last PR"` |
+| "open the chat for jot 5" | `aside open 5` (or the `open_command` from the tools) |
+| "make jot 7 an issue" | `aside promote 7`, which asks first, so an agent without a terminal has to add `--yes` and skip the question |
+
+Each of these is guarded only by the agent's own command approval, which may
+be automatic, so `done` and `promote` (which posts to GitHub) can run without
+you pressing anything. Keep approval on for them if that matters. A jot added
+this way has no session (`aside add` captures none), so it shows under "not in a
+session" in `find`. These shell commands are the existing CLI; the table is
+what they do, not something checked with a real agent session.
+
+`inbox`, `show`, `search`, `find` and `sessions` also return `open_url`, a link to the chat a jot
 came from. The tools open nothing, and clicking the link in a Claude Desktop
 chat doesn't open it either (checked on Desktop 2.19675.0), so the tool
 descriptions tell the agent to offer `aside open <id>` instead, which opens

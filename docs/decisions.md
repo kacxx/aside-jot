@@ -78,6 +78,10 @@ example, `aside done` taking several ids) over giving the server write access.
 **Revisit if:** there's a write that's safe to do without asking, or a
 confirmation step the agent can't bypass.
 
+Later addition (2026-10-08): `sessions` and an `older_than_days` argument on
+`inbox` were added. They read the same data as `aside sessions` and
+`aside inbox --older`, so the server is still read-only.
+
 What "read-only" guarantees was narrowed by
 [Read-only covers the MCP server, not the agent](#read-only-covers-the-mcp-server-not-the-agent).
 
