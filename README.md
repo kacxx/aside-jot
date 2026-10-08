@@ -139,9 +139,10 @@ On a Mac, `aside open 12` opens the chat a jot came from, for jots made in
 Claude Desktop (checked on Desktop 2.19675.0). When a chat has such a link,
 `aside find` prints the command under its resume command, as above. `aside show 12` prints the link as
 `open:`, and the MCP tools return it as `open_url` with an `open_command`. Codex
-app jots get a link too, but it didn't open the Codex app on Windows (checked
-2026-10-07) and hasn't been tried on a Mac. A jot with no link, such as one from a terminal `claude` session,
-gets its resume command instead.
+app jots get a link too. On Windows it opened the Codex app on the right thread
+(2026-10-08); if it doesn't, restart the Codex app and try again. It hasn't
+been tried on a Mac. A jot with no link, such as one from a terminal `claude`
+session, gets its resume command instead.
 
 ### Turn a jot into a GitHub issue
 
