@@ -1,7 +1,7 @@
 // Package mcp is a minimal Model Context Protocol server over stdio.
 //
 // Messages are newline-delimited JSON-RPC 2.0. The server exposes read-only
-// tools (inbox, show, search, find). There is deliberately no capture tool: jots are
+// tools (inbox, show, search, find, sessions). There is deliberately no capture tool: jots are
 // written by the user, never by the model.
 package mcp
 
@@ -45,6 +45,8 @@ const (
 // Reader is the read-only slice of app.Service the server needs.
 type Reader interface {
 	Inbox(ctx context.Context, n int) ([]app.Entry, error)
+	InboxOlder(ctx context.Context, n, days int, ref time.Time) ([]app.Entry, error)
+	Sessions(ctx context.Context, n int) ([]app.Session, error)
 	Show(ctx context.Context, id int64) (app.Entry, error)
 	Search(ctx context.Context, q string, n int) ([]app.Entry, error)
 	Find(ctx context.Context, q string) ([]app.Session, []app.Entry, error)
@@ -278,6 +280,8 @@ var tools = []map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": 20},
+				"older_than_days": map[string]any{"type": "integer", "minimum": 1,
+					"description": "Only jots at least this many calendar days old (the age filter runs before limit)."},
 			},
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
@@ -329,13 +333,33 @@ var tools = []map[string]any{
 		},
 		"annotations": map[string]any{"readOnlyHint": true},
 	},
+	{
+		"name": "sessions",
+		"description": "List the agent sessions (Claude Code, Codex) that have jots, most recently active first, " +
+			"for questions like \"what was I working on last?\". Each session has its repo and branch, latest_jot, " +
+			"jot_count and resume_command to reopen it (the user runs it; this tool doesn't). Done jots count too: " +
+			"jot_count includes them, latest_jot may be one (see its status), and a session whose jots are all done " +
+			"is still listed; use inbox for open jots. open_url, when set, is a link to the chat (Claude Desktop, " +
+			"Codex app) and open_command is the command that opens it: don't show open_url as a link, since " +
+			"clicking it doesn't open the chat in Claude Desktop; offer the user open_command exactly as given, or " +
+			"run it when they ask to open the chat. If they are not set, use resume_command. Jots without a " +
+			"session, such as those from aside add, are not listed. limit caps the sessions.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": 20},
+			},
+		},
+		"annotations": map[string]any{"readOnlyHint": true},
+	},
 }
 
 func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage) (any, *rpcError) {
 	var args struct {
-		Limit int    `json:"limit"`
-		ID    int64  `json:"id"`
-		Query string `json:"query"`
+		Limit         int    `json:"limit"`
+		ID            int64  `json:"id"`
+		Query         string `json:"query"`
+		OlderThanDays int    `json:"older_than_days"`
 	}
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -354,7 +378,14 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 	switch name {
 	case "inbox":
 		var es []app.Entry
-		es, err = s.svc.Inbox(ctx, args.Limit)
+		switch {
+		case args.OlderThanDays < 0:
+			return toolError("older_than_days must be 1 or more"), nil
+		case args.OlderThanDays > 0:
+			es, err = s.svc.InboxOlder(ctx, args.Limit, args.OlderThanDays, s.now())
+		default:
+			es, err = s.svc.Inbox(ctx, args.Limit)
+		}
 		s.svc.AddOpenURLs(ctx, es)
 		s.withCommands(es)
 		now := s.now()
@@ -391,24 +422,25 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		s.svc.AddSessionOpenURLs(ss)
 		sessions := []map[string]any{}
 		for _, x := range ss {
-			latest := x.Latest()
-			sessions = append(sessions, map[string]any{
-				"source":         x.Source,
-				"session_id":     x.ID,
-				"label":          x.LabelText(),
-				"repo":           latest.RepoName,
-				"branch":         latest.Branch,
-				"cwd":            x.Cwd,
-				"last_active":    latest.CreatedAt,
-				"match_count":    len(x.Matches),
-				"matches":        nonNil(x.Matches[max(0, len(x.Matches)-maxSessionMatches):]),
-				"resume_command": x.ResumeCommand(),
-				"open_url":       x.OpenURL,
-				"open_command":   s.sessionOpenCommand(x),
-			})
+			m := s.sessionJSON(x)
+			m["match_count"] = len(x.Matches)
+			m["matches"] = nonNil(x.Matches[max(0, len(x.Matches)-maxSessionMatches):])
+			sessions = append(sessions, m)
 		}
 		total["sessions"], total["not_in_a_session"] = sessions, nonNil(loose)
 		v = total
+	case "sessions":
+		var ss []app.Session
+		ss, err = s.svc.Sessions(ctx, args.Limit)
+		s.svc.AddSessionOpenURLs(ss)
+		sessions := []map[string]any{}
+		for _, x := range ss {
+			m := s.sessionJSON(x)
+			m["jot_count"] = len(x.Jots)
+			m["latest_jot"] = x.Latest()
+			sessions = append(sessions, m)
+		}
+		v = map[string]any{"sessions": sessions}
 	default:
 		return nil, &rpcError{Code: codeInvalidParams, Message: "unknown tool: " + name}
 	}
@@ -423,6 +455,23 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		"content":           []map[string]any{{"type": "text", "text": string(b)}},
 		"structuredContent": v,
 	}, nil
+}
+
+// sessionJSON is the part of a session that find and sessions share.
+func (s *Server) sessionJSON(x app.Session) map[string]any {
+	latest := x.Latest()
+	return map[string]any{
+		"source":         x.Source,
+		"session_id":     x.ID,
+		"label":          x.LabelText(),
+		"repo":           latest.RepoName,
+		"branch":         latest.Branch,
+		"cwd":            x.Cwd,
+		"last_active":    latest.CreatedAt,
+		"resume_command": x.ResumeCommand(),
+		"open_url":       x.OpenURL,
+		"open_command":   s.sessionOpenCommand(x),
+	}
 }
 
 // sessionOpenCommand is the command that opens the session's chat, via its

@@ -96,8 +96,8 @@ func TestSession(t *testing.T) {
 	for _, tl := range list.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "inbox,show,search,find" {
-		t.Errorf("tools = %v; must be read-only inbox, show, search, find", names)
+	if strings.Join(names, ",") != "inbox,show,search,find,sessions" {
+		t.Errorf("tools = %v; must be read-only inbox, show, search, find, sessions", names)
 	}
 
 	type toolResult struct {
@@ -533,5 +533,111 @@ func TestShowReturnsDoneNote(t *testing.T) {
 	text := res.(map[string]any)["content"].([]map[string]any)[0]["text"].(string)
 	if !strings.Contains(text, `"done_note": "moved to ESM-6392"`) && !strings.Contains(text, `"done_note":"moved to ESM-6392"`) {
 		t.Fatalf("show: %s", text)
+	}
+}
+
+func TestInboxOlderThanDays(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "old idea", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(svc, "test")
+	srv.now = func() time.Time { return time.Now().AddDate(0, 0, 5) }
+
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"inbox","arguments":{"older_than_days":5}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"inbox","arguments":{"older_than_days":6}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inbox","arguments":{"older_than_days":-1}}}`
+	var out bytes.Buffer
+	if err := srv.Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if !strings.Contains(lines[0], "old idea") {
+		t.Errorf("a 5-day-old jot should match older_than_days 5: %s", lines[0])
+	}
+	if strings.Contains(lines[1], "old idea") {
+		t.Errorf("a 5-day-old jot should not match older_than_days 6: %s", lines[1])
+	}
+	if !strings.Contains(lines[2], `"isError":true`) {
+		t.Errorf("a negative older_than_days should be a tool error: %s", lines[2])
+	}
+}
+
+func TestSessionsTool(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	for _, req := range []app.CaptureRequest{
+		{Text: "first in s1", Source: "codex", SessionID: "s1", Cwd: "/work"},
+		{Text: "second in s1", Source: "codex", SessionID: "s1", Cwd: "/work"},
+		{Text: "in s2", Source: "codex", SessionID: "s2"},
+		{Text: "no session", Source: "cli"},
+		{Text: "done in s3", Source: "codex", SessionID: "s3"},
+	} {
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A session whose only jot is done is still listed, as the description says.
+	if err := svc.Done(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sessions","arguments":{}}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"sessions","arguments":{"limit":1}}}`
+	var out bytes.Buffer
+	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Sessions []struct {
+					SessionID     string    `json:"session_id"`
+					JotCount      int       `json:"jot_count"`
+					LatestJot     app.Entry `json:"latest_jot"`
+					ResumeCommand string    `json:"resume_command"`
+				} `json:"sessions"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &r); err != nil {
+		t.Fatal(err)
+	}
+	ss := r.Result.StructuredContent.Sessions
+	if len(ss) != 3 {
+		t.Fatalf("sessions should list the three sessions, not the jot without one: %s", lines[0])
+	}
+	var s1 int
+	for _, s := range ss {
+		switch s.SessionID {
+		case "s1":
+			s1 = s.JotCount
+			if s.LatestJot.Text != "second in s1" || s.ResumeCommand != "codex resume s1" {
+				t.Errorf("s1: %+v", s)
+			}
+		case "s3":
+			if s.JotCount != 1 || s.LatestJot.Status != "done" {
+				t.Errorf("s3 (all done): %+v", s)
+			}
+		}
+	}
+	if s1 != 2 {
+		t.Errorf("s1 jot_count = %d, want 2", s1)
+	}
+	r.Result.StructuredContent.Sessions = nil
+	if err := json.Unmarshal([]byte(lines[1]), &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Result.StructuredContent.Sessions) != 1 {
+		t.Errorf("limit 1: %s", lines[1])
 	}
 }
