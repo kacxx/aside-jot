@@ -55,6 +55,21 @@ hook. Until it's trusted, `>>` prompts go to the model.
 
 Prefer to edit the JSON yourself? See [docs/setup.md](docs/setup.md).
 
+### Versions and updating
+
+`@latest` installs the newest release; pin one with a tag such as `@v0.1.0`. What changed in
+each release is in [CHANGELOG.md](CHANGELOG.md), and `aside version` prints the
+one you have:
+
+```
+$ aside version
+aside v0.1.0
+```
+
+To update, run the same `go install …@latest` again. Hooks pick up the new
+binary straight away. The MCP server keeps running the old one until its
+agent restarts, so restart Claude Desktop, Codex and any open agent sessions.
+
 ### Check it works
 
 Type `>> test` in the agent. You should see `✓ Jotted #N` and no reply from
@@ -135,8 +150,9 @@ aside sessions              # your recent chats and their labels
 Only chats with a jot in them can be found, so start a ticket's chat with
 `>> session: SUP-4821 …`.
 
-On a Mac, `aside open 12` opens the chat a jot came from, for jots made in
-Claude Desktop (checked on Desktop 2.19675.0). When a chat has such a link,
+On macOS and Windows, `aside open 12` opens the chat a jot came from, for jots
+made in Claude Desktop (checked on Desktop 2.19675.0 on a Mac and 2.19675.1 on
+Windows 10). When a chat has such a link,
 `aside find` prints the command under its resume command, as above. `aside show 12` prints the link as
 `open:`, and the MCP tools return it as `open_url` with an `open_command`. Codex
 app jots get a link too. On Windows it opened the Codex app on the right thread
@@ -163,8 +179,9 @@ claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp   # Claude Code
 codex mcp add aside -- /Users/you/go/bin/aside mcp                 # Codex
 ```
 
-Then ask the agent things like "what's in my inbox?" or "where did I work on
-SUP-4821?". The server is **read-only**: through it, agents can read and
+Then ask the agent things like "what's in my inbox?", "where did I work on
+SUP-4821?" or "which chats have I jotted in recently?". The tools are listed in
+[docs/setup.md](docs/setup.md). The server is **read-only**: through it, agents can read and
 search your jots, but not add, change or close them. An agent that can run
 shell commands can still run `aside` itself: `aside done` when you ask it to
 close jots, or `aside promote`, which posts a jot to GitHub. `promote` asks
