@@ -305,12 +305,14 @@ built on macOS and Windows, from Desktop's session files (`~/Library/Application
 when a jot has no link and prints its resume command. `aside open` is checked
 for Claude Desktop jots only (macOS, and Windows 10 build 19045 with Desktop
 2.19675.1, where `aside open` uses `rundll32` and prints "opened" even if no
-app handles the link). On Windows 10 build 19045 with aside from `main`
-(2026-10-07), `aside open` for a Codex app jot printed "opened codex://threads/…" but the Codex app
-didn't come forward, and `Start-Process "codex://threads/<id>"` from a plain
-PowerShell window did nothing either, with no error. Treat `codex://` links as not
-working on Windows; use the resume command there. They haven't been
-tested on a Mac, and threads started in the Codex CLI are untested.
+app handles the link). On Windows 10 build 19045, `aside open` for a Codex app
+jot started the Codex app, which was closed, on that
+jot's thread (2026-10-08). The day before, with the app already running, the
+same command printed "opened codex://threads/…" but the app didn't come forward,
+and `Start-Process "codex://threads/<id>"` did nothing either. If a Codex link
+doesn't switch the thread, quit the Codex app completely (including from the
+system tray) and run `aside open` again. Codex links haven't been tested on a
+Mac, and threads started in the Codex CLI are untested.
 
 An agent inside Codex may not be able to run `aside open`. With Codex CLI
 v0.160.1 on macOS (aside built from `main`, 2026-10-07), the agent read
