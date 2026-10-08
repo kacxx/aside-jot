@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/kacxx/aside-jot/compare/v0.1.0...v0.1.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **mcp:** quote jot text exactly and copy commands with the full path ([#70](https://github.com/kacxx/aside-jot/issues/70)) ([68244d7](https://github.com/kacxx/aside-jot/commit/68244d737870448766f4fc2d8cb383776105b29b))
+
 ## 0.1.0 (2026-10-08)
 
 
