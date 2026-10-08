@@ -500,7 +500,7 @@ func TestDescriptionsPointToDone(t *testing.T) {
 	srv := &Server{exe: "/Users/me/go/bin/aside"}
 	for _, tl := range srv.toolList() {
 		name := tl["name"].(string)
-		if name != "inbox" && name != "show" {
+		if name != "inbox" && name != "show" && name != "search" {
 			continue
 		}
 		if d := tl["description"].(string); !strings.Contains(d, `/Users/me/go/bin/aside done <id>... [--note "why"]`) || strings.Contains(d, "{{") {
@@ -510,6 +510,22 @@ func TestDescriptionsPointToDone(t *testing.T) {
 	srv.exe = ""
 	if d := srv.toolList()[0]["description"].(string); !strings.Contains(d, "`aside done <id>...") {
 		t.Errorf("without a known path the command is bare aside: %s", d)
+	}
+}
+
+func TestDescriptionsQuoteJotsAndCopyCommands(t *testing.T) {
+	srv := &Server{exe: "/Users/me/go/bin/aside"}
+	for _, tl := range srv.toolList() {
+		d := tl["description"].(string)
+		for _, want := range []string{
+			"Quote each jot's text exactly as stored",
+			"give the user that entry's open_command exactly as given, including the full path",
+			"don't write a generic `aside open <id>`",
+		} {
+			if !strings.Contains(d, want) {
+				t.Errorf("%s description lacks %q: %s", tl["name"], want, d)
+			}
+		}
 	}
 }
 
