@@ -523,7 +523,7 @@ func TestShowReturnsDoneNote(t *testing.T) {
 	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "x", Source: "cli"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.DoneAll(ctx, []int64{1}, "moved to ESM-6392"); err != nil {
+	if _, err := svc.DoneAll(ctx, []int64{1}, "moved to PAY-1207"); err != nil {
 		t.Fatal(err)
 	}
 	res, rerr := NewServer(svc, "test").callTool(ctx, "show", json.RawMessage(`{"id":1}`))
@@ -531,7 +531,7 @@ func TestShowReturnsDoneNote(t *testing.T) {
 		t.Fatal(rerr)
 	}
 	text := res.(map[string]any)["content"].([]map[string]any)[0]["text"].(string)
-	if !strings.Contains(text, `"done_note": "moved to ESM-6392"`) && !strings.Contains(text, `"done_note":"moved to ESM-6392"`) {
+	if !strings.Contains(text, `"done_note": "moved to PAY-1207"`) && !strings.Contains(text, `"done_note":"moved to PAY-1207"`) {
 		t.Fatalf("show: %s", text)
 	}
 }
