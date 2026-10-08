@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in aside doesn't work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Jots are private notes: don't paste jot text, transcripts or session ids you'd rather keep to yourself. A made-up example that shows the problem is enough.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and any error message.
+      placeholder: |
+        I typed `>> check the retry logic` in Claude Code and the prompt was sent to the model instead of being jotted.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: aside version
+      description: The output of `aside version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Claude Code (terminal)
+        - Claude Desktop
+        - Claude Code in VS Code
+        - Codex CLI
+        - Codex app
+        - Cursor
+        - None (aside CLI only)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: agent-version
+    attributes:
+      label: Agent version
+      placeholder: "Claude Code 2.1.287, Codex app 26.930.31730, …"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.4, Windows 11, Ubuntu 24.04, …"
+    validations:
+      required: true
+  - type: textarea
+    id: paths
+    attributes:
+      label: Output of `aside paths`
+      description: Shows which database and binary aside is using, and warns if a hook would run a different aside. Replace your username if you like.
+      render: text
