@@ -322,3 +322,16 @@ to open URL claude://code/continue?session=local_… kLSExecutableIncorrectForma
 The same command run in a plain Terminal window switched Claude Desktop to the
 session. The cause isn't confirmed; Codex's command sandbox is the likely one. If it fails for you inside
 an agent, run the command from your own terminal.
+
+## Agent skill (optional)
+
+[`skills/aside/SKILL.md`](../skills/aside/SKILL.md) is a skill that tells an
+agent how to read your jots: which MCP tool or CLI command answers "what's in my
+inbox", "where did I work on SUP-4821" and so on, and that it should offer
+`aside done`, `aside promote` and resume commands rather than run them. It
+uses the same read-only MCP tools as above and adds nothing to the server.
+
+To use it, copy the folder into your agent's skills directory (for Claude Code,
+`~/.claude/skills/aside/`). Other agents that read `SKILL.md` folders can use it
+the same way; check that agent's docs for the directory. The `npx skills`
+installer hasn't been tried with it. It hasn't been tested in a real agent yet.
