@@ -334,4 +334,4 @@ uses the same read-only MCP tools as above and adds nothing to the server.
 To use it, copy the folder into your agent's skills directory (for Claude Code,
 `~/.claude/skills/aside/`). Other agents that read `SKILL.md` folders can use it
 the same way; check that agent's docs for the directory. The `npx skills`
-installer hasn't been tried with it. It hasn't been tested in a real agent yet.
+installer hasn't been tried with it.
