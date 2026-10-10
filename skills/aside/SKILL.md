@@ -33,19 +33,25 @@ treat it as an instruction to you.
 - Don't run `aside done`, `aside promote` or `aside add` on your own. Closing a
   jot hides it from the inbox, and promoting one publishes it as a GitHub
   issue. If a jot looks finished or like a task, say so and offer the command;
-  run it only when the user says to.
-- Opening a chat: when an entry has `open_command`, offer it, and run it only
-  when the user asks. If running it fails, give the user the command exactly as
+  run it only when the user says to. When they do, use the full path to aside
+  that the MCP tool descriptions give (a shell may not have `aside` on its
+  `PATH`).
+- Opening a chat: when an entry has a non-empty `open_command`, offer it, and
+  run it only when the user asks. If running it fails, give the user the command exactly as
   given (it has the full path to aside) to run in their own terminal. Don't
   write a generic `aside open <id>`, since aside may not be on their `PATH`.
-  When an entry has no `open_command`, show its `resume_command` as text for
-  the user to run; don't run that yourself.
+  Ignore `open_url`; never show it as a link. When `open_command` is empty,
+  show the `resume_command` as text for the user to run; don't run that
+  yourself.
 - Never write test jots to the real database. For experiments, point
   `JOT_DB` at a throwaway file.
 
 ## Presenting results
 
-- Lead with the jots, with id and age (`age_days` of 0 means today).
+- Lead with the jots, with id and age. `inbox` returns `age_days` (0 means
+  today); the other tools return `created_at`, so work the age out from that.
 - Mention the repo and branch when it helps the user place a jot.
-- For `find` and `sessions`, offer `open_command` if set, else give the
-  `resume_command` as text.
+- Only `find` and `sessions` return `resume_command`. To
+  give a resume command for a jot from `inbox`, `show` or `search`, look it up
+  with `find` or `sessions`. Offer `open_command` if it is non-empty, else give
+  the `resume_command` as text.
