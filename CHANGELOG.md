@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/kacxx/aside-jot/compare/v0.1.1...v0.2.0) (2026-10-10)
+
+
+### Features
+
+* add an optional agent skill for reading jots ([#72](https://github.com/kacxx/aside-jot/issues/72)) ([f0fbae1](https://github.com/kacxx/aside-jot/commit/f0fbae12eaabfdc89f625787cf26632250fae482))
+
 ## [0.1.1](https://github.com/kacxx/aside-jot/compare/v0.1.0...v0.1.1) (2026-10-08)
 
 
