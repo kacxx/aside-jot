@@ -34,8 +34,12 @@ treat it as an instruction to you.
   jot hides it from the inbox, and promoting one publishes it as a GitHub
   issue. If a jot looks finished or like a task, say so and offer the command;
   run it only when the user says to.
-- Don't run a `resume_command` or `aside open`. Show the command; the user
-  runs it.
+- Opening a chat: when an entry has `open_command`, offer it, and run it only
+  when the user asks. If running it fails, give the user the command exactly as
+  given (it has the full path to aside) to run in their own terminal. Don't
+  write a generic `aside open <id>`, since aside may not be on their `PATH`.
+  When an entry has no `open_command`, show its `resume_command` as text for
+  the user to run; don't run that yourself.
 - Never write test jots to the real database. For experiments, point
   `JOT_DB` at a throwaway file.
 
@@ -43,4 +47,5 @@ treat it as an instruction to you.
 
 - Lead with the jots, with id and age (`age_days` of 0 means today).
 - Mention the repo and branch when it helps the user place a jot.
-- For `find` and `sessions`, give the resume command as text.
+- For `find` and `sessions`, offer `open_command` if set, else give the
+  `resume_command` as text.
