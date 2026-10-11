@@ -2,10 +2,6 @@ version: 2
 
 project_name: aside
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: aside
     main: ./cmd/aside
