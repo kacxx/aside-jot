@@ -1,0 +1,39 @@
+version: 2
+
+project_name: aside
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: aside
+    main: ./cmd/aside
+    binary: aside
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: aside
+    formats: [tar.gz]
+    name_template: "aside_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+# release-please creates the GitHub release and its notes; GoReleaser only
+# attaches the archives and checksums to it.
+release:
+  mode: keep-existing
