@@ -26,12 +26,30 @@ to the model with your next message ([why](docs/cursor.md)).
 
 ## Install
 
-Requires Go 1.25+.
+With Go 1.25+:
 
 ```sh
 go install github.com/kacxx/aside-jot/cmd/aside@latest
 aside setup claude    # or: aside setup codex
 ```
+
+Without Go, download the archive for your system from the
+[latest release](https://github.com/kacxx/aside-jot/releases/latest)
+(macOS, Linux and Windows, amd64 and arm64; `checksums.txt` has the SHA-256 of
+each). Put `aside` somewhere it will stay, such as `~/.local/bin`, then run
+setup from there, because setup records the path it was run from:
+
+```sh
+tar -xzf aside_*_darwin_arm64.tar.gz
+mkdir -p ~/.local/bin && mv aside ~/.local/bin/
+~/.local/bin/aside setup claude    # or: setup codex
+```
+
+The binaries aren't signed. On macOS, a file downloaded in a browser is marked
+as quarantined, and Gatekeeper may refuse to run it; clear the flag once with
+`xattr -d com.apple.quarantine ~/.local/bin/aside`. Downloads with `curl` or
+`gh release download` aren't marked. On Windows, unzip `aside.exe` to a folder
+where it will stay and run `aside.exe setup claude` from there.
 
 `aside setup` adds the `UserPromptSubmit` hook to `~/.claude/settings.json`
 (or `~/.codex/hooks.json`) with the binary's absolute path, since editors often
@@ -66,7 +84,10 @@ $ aside version
 aside v0.1.0
 ```
 
-To update, run the same `go install …@latest` again. Hooks pick up the new
+A downloaded binary prints the version without the `v` (`aside 0.2.0`).
+
+To update, run the same `go install …@latest` again, or replace the
+downloaded binary at the same path (no need to rerun setup). Hooks pick up the new
 binary straight away. The MCP server keeps running the old one until its
 agent restarts, so restart Claude Desktop, Codex and any open agent sessions.
 
