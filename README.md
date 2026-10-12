@@ -35,21 +35,26 @@ aside setup claude    # or: aside setup codex
 
 Without Go, download the archive for your system from the
 [latest release](https://github.com/kacxx/aside-jot/releases/latest)
-(macOS, Linux and Windows, amd64 and arm64; `checksums.txt` has the SHA-256 of
-each). Put `aside` somewhere it will stay, such as `~/.local/bin`, then run
-setup from there, because setup records the path it was run from:
+(macOS, Linux and Windows, amd64 and arm64). Put `aside` somewhere it will
+stay, such as `~/.local/bin`, then run setup from there, because setup records
+the path it was run from. For example, on Apple Silicon:
 
 ```sh
-tar -xzf aside_*_darwin_arm64.tar.gz
+shasum -a 256 -c checksums.txt --ignore-missing    # if you downloaded checksums.txt too
+tar -xzf aside_*_darwin_arm64.tar.gz aside
 mkdir -p ~/.local/bin && mv aside ~/.local/bin/
 ~/.local/bin/aside setup claude    # or: setup codex
 ```
 
+`~/.local/bin` isn't on `PATH` by default on macOS; add
+`export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` to run plain `aside`.
+
 The binaries aren't signed. On macOS, a file downloaded in a browser is marked
-as quarantined, and Gatekeeper may refuse to run it; clear the flag once with
-`xattr -d com.apple.quarantine ~/.local/bin/aside`. Downloads with `curl` or
-`gh release download` aren't marked. On Windows, unzip `aside.exe` to a folder
-where it will stay and run `aside.exe setup claude` from there.
+as quarantined, extracting it keeps the mark, and Gatekeeper may refuse to run
+it; clear it with `xattr -d com.apple.quarantine ~/.local/bin/aside`. Downloads
+with `curl` or `gh release download` aren't marked. On Windows, unzip
+`aside.exe` to a folder where it will stay and run `.\aside.exe setup claude`
+from there in PowerShell.
 
 `aside setup` adds the `UserPromptSubmit` hook to `~/.claude/settings.json`
 (or `~/.codex/hooks.json`) with the binary's absolute path, since editors often
@@ -57,8 +62,9 @@ run hooks with a minimal `PATH`. It keeps your other settings and hooks, backs
 the file up first (`settings.json.bak-<time>`), and replaces an older aside
 entry instead of adding a second. `--dry-run` shows the result and writes
 nothing; `--mcp` also prints the command that gives the agent read-only access
-to your jots (it doesn't run it). If `aside` isn't on your `PATH` yet, run it as
-`"$(go env GOPATH)/bin/aside" setup claude`.
+to your jots (it doesn't run it). If `aside` isn't on your `PATH` yet, run it by
+its full path: `"$(go env GOPATH)/bin/aside" setup claude` after `go install`,
+or `~/.local/bin/aside setup claude` for a downloaded binary.
 
 ```
 $ aside setup claude
@@ -84,18 +90,19 @@ $ aside version
 aside v0.1.0
 ```
 
-A downloaded binary prints the version without the `v` (`aside 0.2.0`).
-
-To update, run the same `go install …@latest` again, or replace the
-downloaded binary at the same path (no need to rerun setup). Hooks pick up the new
-binary straight away. The MCP server keeps running the old one until its
+To update, run the same `go install …@latest` again, or `mv` the new
+downloaded binary over the old one at the same path (no need to rerun setup).
+Use `mv` rather than `cp`: on Apple Silicon, copying over the old file can get
+the new one killed on start. A browser download needs the `xattr` step again.
+Hooks pick up the new binary straight away. The MCP server keeps running the old one until its
 agent restarts, so restart Claude Desktop, Codex and any open agent sessions.
 
 ### Check it works
 
 Type `>> test` in the agent. You should see `✓ Jotted #N` and no reply from
 the model. Then run `aside inbox` in a terminal. If your shell can't find
-`aside`, add `$(go env GOPATH)/bin` to your `PATH`.
+`aside`, add `$(go env GOPATH)/bin` (after `go install`) or the folder you put
+the downloaded binary in to your `PATH`.
 
 Windows paths, project-level configs, Codex trust details and known agent
 behaviour: [docs/setup.md](docs/setup.md).
