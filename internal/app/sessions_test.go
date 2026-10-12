@@ -181,6 +181,16 @@ func TestSessionsResumeFromStartDir(t *testing.T) {
 	}
 }
 
+func TestResumeCommandWindows(t *testing.T) {
+	old := resumeGOOS
+	resumeGOOS = "windows"
+	t.Cleanup(func() { resumeGOOS = old })
+	s := Session{Source: "claude", ID: "abc-1", Cwd: `C:\Users\me\my repo`}
+	if got, want := s.ResumeCommand(), `cd "C:\Users\me\my repo"; claude --resume abc-1`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestResumeCommand(t *testing.T) {
 	cases := []struct {
 		s    Session

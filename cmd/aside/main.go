@@ -259,6 +259,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
+		svc.AddSessionOpenURLs(ss)
 		if len(ss) == 0 {
 			fmt.Fprintln(stdout, "No sessions yet: jots captured by a hook carry a session.")
 		}
