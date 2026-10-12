@@ -192,6 +192,9 @@ func TestResumeCommandWindows(t *testing.T) {
 }
 
 func TestResumeCommand(t *testing.T) {
+	old := resumeGOOS
+	resumeGOOS = "linux"
+	t.Cleanup(func() { resumeGOOS = old })
 	cases := []struct {
 		s    Session
 		want string

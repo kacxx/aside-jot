@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -58,6 +59,17 @@ func TestCLIFlow(t *testing.T) {
 	}
 }
 
+// resumeAPI is the resume command printed for the session in /work/api; on
+// Windows it is written for PowerShell.
+func init() {
+	resumeAPI = "cd /work/api && claude --resume c1"
+	if runtime.GOOS == "windows" {
+		resumeAPI = `cd "/work/api"; claude --resume c1`
+	}
+}
+
+var resumeAPI string
+
 func TestFindAndSessions(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "jot.db")
 	t.Setenv("JOT_DB", db)
@@ -97,7 +109,7 @@ func TestFindAndSessions(t *testing.T) {
 		"  claude · 2 jots · last 3d (#2)\n",
 		"  #1    3d     session: SUP-4821 token TTL\n",
 		"  #2    3d     SUP-4821 needs a backend ticket  (done)\n",
-		"  cd /work/api && claude --resume c1\n",
+		"  " + resumeAPI + "\n",
 		"Not in a session:\n#3 ",
 	} {
 		if !strings.Contains(got, want) {
@@ -108,7 +120,7 @@ func TestFindAndSessions(t *testing.T) {
 		t.Fatalf("find no match: %q", got)
 	}
 	got = sh("sessions")
-	if !strings.HasPrefix(got, "SUP-4821 token TTL\n  claude · 2 jots · last 3d (#2)\n  cd /work/api && claude --resume c1\n") {
+	if !strings.HasPrefix(got, "SUP-4821 token TTL\n  claude · 2 jots · last 3d (#2)\n  "+resumeAPI+"\n") {
 		t.Fatalf("sessions: %q", got)
 	}
 }
