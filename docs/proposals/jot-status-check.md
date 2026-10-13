@@ -1,6 +1,6 @@
 # Jot status check (#78): proposal
 
-Status: **1 open**. Don't merge yet: D3 is reopened because the fact-check found a Codex transcript does exist.
+Status: **decided**. Ready to merge, then slice into tickets.
 Source: #78
 
 Decisions D1 to D5 come from the owner's review comment on #78 (12 Oct 2026), in the order given there.
@@ -23,15 +23,15 @@ The agent proposes each `aside done`; the user approves. No auto-`done`. Closing
 ### D2: Same-session only for v1
 Only the jot's own session is read. Cross-session matching is out of v1 ("Cross-session is what `find` already covers").
 
-### D3: Codex jots get "can't tell"
-Status: reopened — fact-check: a Codex jot's transcript does exist. The Codex hook payload carries `transcript_path` and aside drops it; the rollout file is also on disk, findable by `session_id` (see the fact-check rows on Codex).
+### D3: Codex jots get "can't tell" in v1; the hook stores the path (revised 2026-10-14)
+Keep "can't tell" for Codex in v1, with the cost as the reason, and store `transcript_path` in the Codex hook from now on. It keeps the v1 scope the owner chose, and storing the path is a small hook change that means new Codex jots already have it if a reader is added later.
 
-Current text: for Codex, answer "can't tell". Don't invent a transcript you don't have.
+<details><summary>Superseded (2026-10-14)</summary>
 
-To settle it, choose one of these:
-- (a) Keep "can't tell" for Codex in v1, and record why: the cost is a second transcript format, not a missing file.
-- (b) Store `transcript_path` in the Codex hook from now on, and add a Codex rollout reader to `activity`.
-- (c) Do (b), and for existing Codex jots find the rollout under `~/.codex/sessions` by `session_id`.
+For Codex, answer "can't tell". Don't invent a transcript you don't have.
+
+Reason: the fact-check found Codex jots do have a transcript (the hook payload carries `transcript_path`, and the rollout is under `~/.codex/sessions`); the cost of v1 support is a second transcript format, not a missing file. Settled by grill on D3 alone.
+</details>
 
 ### D4: The command is named `activity`
 `activity`, not `since` or `transcript`: it's clearer for "what happened after this jot".
@@ -43,13 +43,14 @@ To settle it, choose one of these:
 
 ## Shape
 
-1. **`activity <id>`: a read-only MCP tool and CLI subcommand.** For a jot with a readable transcript, it returns the session's records after `created_at`, oldest first: user prompts and assistant text, with tool calls collapsed to a count or one-line summary. The output has a hard size cap and reports how many records were left out (D5). There is no judgement in aside. When there's no transcript (an `aside add` jot, Cursor, a deleted file, and Codex unless D3 changes), it returns `transcript: unavailable` and the reason.
-2. **The transcript reader is generalised.** `replyBefore` in `internal/app/reply.go` keeps records at or before t and resets at each prompt. The new reader keeps records after t and keeps the prompts. It reuses the record decoding, `userRecordKind` and `contentText`. The reader also needs its own read bound: today the whole file is read and capped only afterwards.
-3. **The aside skill gets an "update" routine.** "update jot 31" means: call `show`, call `activity`, then give a verdict: "done because X (evidence)", "no sign yet" or "can't tell". For a "done" verdict, offer `aside done 31 --note "..."` with the note naming the evidence (D1). Transcript text is quoted as data (D5).
-4. **"update all"** is the skill looping over open jots that have a session, oldest first, with a hard limit on jots per run (D5; 20 is suggested, the exact number is set when it's built). It gives one verdict and one `done` line per jot.
-5. **Tests:** reply.go's tests use inline JSONL records in a temp file, and the new reader's tests would follow that pattern. There are no recorded transcript fixtures today.
+1. **`activity <id>`: a read-only MCP tool and CLI subcommand.** For a jot with a readable transcript, it returns the session's records after `created_at`, oldest first: user prompts and assistant text, with tool calls collapsed to a count or one-line summary. The output has a hard size cap and reports how many records were left out (D5). There is no judgement in aside. When there's no transcript (an `aside add` jot, Cursor, a deleted file, and Codex (D3)), it returns `transcript: unavailable` and the reason.
+2. **The Codex hook stores `transcript_path`** in the jot's metadata from now on, as the Claude hook does. No Codex reader is added in v1 (D3).
+3. **The transcript reader is generalised.** `replyBefore` in `internal/app/reply.go` keeps records at or before t and resets at each prompt. The new reader keeps records after t and keeps the prompts. It reuses the record decoding, `userRecordKind` and `contentText`. The reader also needs its own read bound: today the whole file is read and capped only afterwards.
+4. **The aside skill gets an "update" routine.** "update jot 31" means: call `show`, call `activity`, then give a verdict: "done because X (evidence)", "no sign yet" or "can't tell". For a "done" verdict, offer `aside done 31 --note "..."` with the note naming the evidence (D1). Transcript text is quoted as data (D5).
+5. **"update all"** is the skill looping over open jots that have a session, oldest first, with a hard limit on jots per run (D5; 20 is suggested, the exact number is set when it's built). It gives one verdict and one `done` line per jot.
+6. **Tests:** reply.go's tests use inline JSONL records in a temp file, and the new reader's tests would follow that pattern. There are no recorded transcript fixtures today.
 
-Size: one app function, one MCP tool, one CLI subcommand, tests and a skill section. Prefix `feat:`.
+Size: one app function, one MCP tool, one CLI subcommand, a small Codex hook change, tests and a skill section. Prefix `feat:`.
 
 ## Fact-check
 
@@ -62,7 +63,9 @@ Size: one app function, one MCP tool, one CLI subcommand, tests and a skill sect
 | `promote --with-reply` reads these transcripts | ✅ `replyBefore` streams the JSONL; it caps the output at 8,000 runes but reads the whole file; Claude only | `internal/app/reply.go:18,27-87,272-287` |
 | The reader generalises to "records after t" | ✅ flip the filter at line 53 and drop the reset-on-prompt; the decoding carries over | `internal/app/reply.go:53,127-148` |
 | `created_at` compares cleanly with transcript timestamps | ✅ both are UTC RFC 3339 with milliseconds, compared as `time.Time` | `store.go:51,594`; `reply.go:52` |
-| Codex jots have no transcript (the basis of D3) | ❌ the Codex payload carries `transcript_path` (fixtures `capture.json:3`, `normal.json:3`; null only in `mid_prompt.json`), but `codex.go` stores only `turn_id` and `model`. A live probe of Codex jot #18 found its rollout at `~/.codex/sessions/2026/10/02/rollout-…-<session_id>.jsonl` | `internal/hooks/codex.go:25-37`; `testdata/hooks/codex/`; probe of the live DB and `~/.codex/sessions` |
+| Codex jots have no transcript (the basis of D3) | ❌ the Codex payload carries `transcript_path` (fixtures `capture.json:3`, `normal.json:3`; null only in `mid_prompt.json`), but `codex.go` stores only `turn_id` and `model`. A live probe of Codex jot #18 found its rollout at `~/.codex/sessions/2026/10/02/rollout-…-<session_id>.jsonl` | `internal/hooks/codex.go:25-37`; `testdata/hooks/codex/`; probe of the live DB and `~/.codex/sessions`. Resolved by revised D3 |
+| The Codex hook can store `transcript_path` with a small change (revised D3) | ✅ the shared `PromptInput` already parses it; `codex.go` only needs to copy it into the metadata | `internal/hooks/prompt.go:15`, `internal/hooks/codex.go:25-37`, `internal/hooks/claude.go:57-58` |
+| A stored Codex path won't be read as a Claude transcript | ✅ `promote --with-reply` reads transcripts only for `source == "claude"` | `internal/app/reply.go:273` |
 | Codex rollouts use another format | ✅ records are `session_meta`, `turn_context`, `response_item`, `event_msg` with ISO timestamps, so they need their own reader | probe: `jq` on #18's rollout |
 | Cursor jots have no transcript | ✅ `transcript_path` is null in every Cursor fixture; none of the 7 live Cursor jots has one | `testdata/hooks/cursor/*.json:9`; probe of the live DB |
 | `aside done <id> --note` records a reason | ✅ stored as `done_note` in metadata; it takes several ids | `cmd/aside/main.go:61`, `store.go:106-110,472-525` |
