@@ -123,7 +123,7 @@ records the results for the initial version.
   replaced.
 - README examples must match real output. Docs claim only what was verified,
   and say which version it was verified on.
-- If a ticket's work shows a decision it implements (on its `Implements:` line, or in its own `### D<n>` decisions) is wrong, impossible or contradicted, run the `flag-decision` skill (dev-flow plugin) and stop. Don't redesign inside the ticket.
+- If a ticket's work shows a decision it implements (on its `Implements:` line, or in its own `### D<n>` decisions) is wrong, impossible or contradicted, run the `flag-decision` skill (dev-flow plugin) and stop. If that skill isn't available, stop anyway and comment on the ticket saying which decision is wrong and why. Don't redesign inside the ticket.
 
 ## Current work
 
