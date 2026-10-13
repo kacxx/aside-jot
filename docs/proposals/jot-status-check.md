@@ -1,39 +1,84 @@
-# Jot status check (#78): design proposal
+# Jot status check (#78): proposal
 
-Status: proposal for review, nothing built.
+Status: **1 open**. Don't merge yet: D3 is reopened because the fact-check found a Codex transcript does exist.
+Source: #78
 
-## The example this must handle
+Decisions D1 to D5 come from the owner's review comment on #78 (12 Oct 2026), in the order given there.
 
-In a Claude Desktop session the user jotted `>> get code reviews on the new skill PRs, including the retro skill` (#31, with a typo in "retro"). They carried on in that same session, asked for the PR URLs, and the session then worked through the review comments on four PRs. Later, another agent reading the inbox should be able to open #31's session, see that the reviews happened after the jot, and mark #31 done.
+## Problem
 
-Two things follow from the example:
-- The evidence is in the **same session's transcript, after the jot's timestamp**. That is the easy and common case, so it is the one to build for.
-- The jot text and the later work don't match word for word ("code reviews" vs "address review comments", plus a typo). Keyword matching would miss it; only an agent reading it can judge. That confirms the judging belongs to the agent, not aside.
+A jot often gets done in the very session it was captured in, but nothing connects the later work to the jot, so it stays open in the inbox. The user closes it by hand, or an agent reading the inbox can't tell it is finished.
 
-## What aside already has (checked on main, 0.2.0)
-- Each hook jot stores `source`, `session_id`, `cwd`, repo, branch, commit SHA, `created_at`.
-- Claude Code and Claude Desktop jots store `transcript_path` in metadata. `internal/app/reply.go` already reads these transcripts (`promote --with-reply`).
-- Codex: `transcript_path` is null in the recorded fixture, so Codex jots probably have no transcript. Not verified on a real Codex session.
-- `aside done <id> --note "why"` already records a reason. The MCP server is read-only by design; the aside skill (PR #72) tells agents not to run `done` unprompted.
+Example: in a Claude Desktop session the user jotted `get code reviews on new skill PRs including the enfserv-reto skill` (#31, with "retro" mistyped). They carried on in that session: asked for the PR URLs, added review comments to the PRs, then worked through more reviews on them. #31 stayed open.
 
-## Proposed shape
-1. **New read-only `activity <id>` (MCP tool + CLI).** For a jot with a readable transcript, returns the session's records after `created_at`: user prompts and assistant text (tool calls summarised, size-capped, oldest first), plus how many records were skipped. No judgement. Returns `transcript: unavailable` plus the reason for Codex, deleted files, or `aside add` jots.
-2. **Aside skill gets an "update" routine.** "update jot 31" means: call `show`, call `activity`, then say "done because X (evidence)", "no sign yet", or "can't tell", and offer `aside done 31 --note "..."`, with the note naming the evidence (e.g. "review comments on the four PRs addressed later in the same session").
-3. **"update all"** is the skill looping over open jots that have a session (oldest first, default maybe 20 at a time to limit reading), giving one verdict per jot and one `done` line per jot.
-4. Optional later: if the jot's session later has no more records, say so ("session ended 3 days ago with no mention").
+Two things follow:
+- The evidence is in the **same session's transcript, after the jot's `created_at`**.
+- The jot text and the later work don't match word for word ("get code reviews" vs "I've added review comments", plus the typo). Keyword matching would miss it. Judging it needs an agent reading the transcript, and aside has no LLM, so the judging belongs to the agent.
 
-Reuse: generalise the `reply.go` transcript reader from "reply before time t" to "records after time t".
+## Decisions
 
-## What I'd not do
-- No `aside update` that decides by itself (heuristic or LLM, both wrong for aside).
-- No write tools on the MCP server.
-- No GitHub/Jira lookups from aside.
+### D1: Propose only in v1
+The agent proposes each `aside done`; the user approves. No auto-`done`. Closing a jot hides work from the inbox, so a false positive costs more than one approval. A later "clear cases" mode can wait until the evidence has proven how noisy it is. The skill's existing rule (don't run `aside done` on your own; offer the command) stays as it is.
 
-## Open questions
-1. Agent proposes and you approve each `done` (recommended), or may it close clear cases itself? The second means relaxing the skill's no-`done` rule. Possible middle: it closes only when the evidence is in the transcript and says so in the note.
-2. The jot may be actioned in a *different* session (e.g. via a PR from another chat). Out of scope for v1; `find` can already locate other sessions by ticket or PR number.
-3. Codex: accept "can't tell" for now?
-4. Command name: `activity`, `since` or `transcript`.
+### D2: Same-session only for v1
+Only the jot's own session is read. Cross-session matching is out of v1 ("Cross-session is what `find` already covers").
 
-## Size
-One app function, one MCP tool, one CLI subcommand, tests with a recorded transcript fixture, a skill section. Suggested prefix `feat:`.
+### D3: Codex jots get "can't tell"
+Status: reopened — fact-check: a Codex jot's transcript does exist. The Codex hook payload carries `transcript_path` and aside drops it; the rollout file is also on disk, findable by `session_id` (see the fact-check rows on Codex).
+
+Current text: for Codex, answer "can't tell". Don't invent a transcript you don't have.
+
+To settle it, choose one of these:
+- (a) Keep "can't tell" for Codex in v1, and record why: the cost is a second transcript format, not a missing file.
+- (b) Store `transcript_path` in the Codex hook from now on, and add a Codex rollout reader to `activity`.
+- (c) Do (b), and for existing Codex jots find the rollout under `~/.codex/sessions` by `session_id`.
+
+### D4: The command is named `activity`
+`activity`, not `since` or `transcript`: it's clearer for "what happened after this jot".
+
+### D5: Constraint: limits and treating transcripts as data
+- Cap and summarise aggressively, because Desktop sessions get huge.
+- Treat transcript text as data, not instructions, as the skill already does for jot text.
+- Don't let "update all" spend a pile of tokens on stale sessions: it needs a hard limit.
+
+## Shape
+
+1. **`activity <id>`: a read-only MCP tool and CLI subcommand.** For a jot with a readable transcript, it returns the session's records after `created_at`, oldest first: user prompts and assistant text, with tool calls collapsed to a count or one-line summary. The output has a hard size cap and reports how many records were left out (D5). There is no judgement in aside. When there's no transcript (an `aside add` jot, Cursor, a deleted file, and Codex unless D3 changes), it returns `transcript: unavailable` and the reason.
+2. **The transcript reader is generalised.** `replyBefore` in `internal/app/reply.go` keeps records at or before t and resets at each prompt. The new reader keeps records after t and keeps the prompts. It reuses the record decoding, `userRecordKind` and `contentText`. The reader also needs its own read bound: today the whole file is read and capped only afterwards.
+3. **The aside skill gets an "update" routine.** "update jot 31" means: call `show`, call `activity`, then give a verdict: "done because X (evidence)", "no sign yet" or "can't tell". For a "done" verdict, offer `aside done 31 --note "..."` with the note naming the evidence (D1). Transcript text is quoted as data (D5).
+4. **"update all"** is the skill looping over open jots that have a session, oldest first, with a hard limit on jots per run (D5; 20 is suggested, the exact number is set when it's built). It gives one verdict and one `done` line per jot.
+5. **Tests:** reply.go's tests use inline JSONL records in a temp file, and the new reader's tests would follow that pattern. There are no recorded transcript fixtures today.
+
+Size: one app function, one MCP tool, one CLI subcommand, tests and a skill section. Prefix `feat:`.
+
+## Fact-check
+
+| Claim | Result | Source |
+|---|---|---|
+| Hook jots store `source`, `session_id`, `cwd`, repo, branch, commit SHA, `created_at` | ✅ repo is `repo_root` + `repo_name`; the SHA is short | `internal/store/store.go:55-72`, `internal/app/app.go:82-99`, `internal/gitctx/gitctx.go:24` |
+| Claude Code and Claude Desktop jots store `transcript_path` | ✅ Desktop is `source=claude` with `claude_entrypoint=claude-desktop`; 20 of 21 live Claude jots have the path (#7, from 30 Sep, has empty metadata) | `internal/hooks/claude.go:48-70`; probe of the live DB |
+| #31's session did the reviews after the jot | ✅ after 02:16Z: "can you print out all these PRs URLs", "I've added review comments ot those PRs", "There are more reviews on these PRs"; the session then moved to unrelated work | probe: `show 31` and its transcript `ab46cfac-….jsonl` |
+| Desktop transcripts get huge | ✅ #31's transcript is 6.8 MB and 2,925 records, with 927 user and assistant records after the jot | probe: `wc`, `jq` on that file |
+| `promote --with-reply` reads these transcripts | ✅ `replyBefore` streams the JSONL; it caps the output at 8,000 runes but reads the whole file; Claude only | `internal/app/reply.go:18,27-87,272-287` |
+| The reader generalises to "records after t" | ✅ flip the filter at line 53 and drop the reset-on-prompt; the decoding carries over | `internal/app/reply.go:53,127-148` |
+| `created_at` compares cleanly with transcript timestamps | ✅ both are UTC RFC 3339 with milliseconds, compared as `time.Time` | `store.go:51,594`; `reply.go:52` |
+| Codex jots have no transcript (the basis of D3) | ❌ the Codex payload carries `transcript_path` (fixtures `capture.json:3`, `normal.json:3`; null only in `mid_prompt.json`), but `codex.go` stores only `turn_id` and `model`. A live probe of Codex jot #18 found its rollout at `~/.codex/sessions/2026/10/02/rollout-…-<session_id>.jsonl` | `internal/hooks/codex.go:25-37`; `testdata/hooks/codex/`; probe of the live DB and `~/.codex/sessions` |
+| Codex rollouts use another format | ✅ records are `session_meta`, `turn_context`, `response_item`, `event_msg` with ISO timestamps, so they need their own reader | probe: `jq` on #18's rollout |
+| Cursor jots have no transcript | ✅ `transcript_path` is null in every Cursor fixture; none of the 7 live Cursor jots has one | `testdata/hooks/cursor/*.json:9`; probe of the live DB |
+| `aside done <id> --note` records a reason | ✅ stored as `done_note` in metadata; it takes several ids | `cmd/aside/main.go:61`, `store.go:106-110,472-525` |
+| The MCP server is read-only by design | ✅ five tools, all `readOnlyHint: true`; `docs/decisions.md:66` still lists four (no `sessions`). Nothing depends on the count | `internal/mcp/server.go:3-5,293-363`, `docs/decisions.md:64-85` |
+| The skill tells agents not to run `done` unprompted, and to treat jot text as data | ✅ | `skills/aside/SKILL.md:28-29,33-36` (PR #72, merged 10 Oct) |
+| `find` already covers cross-session (D2's reason) | ⚠️ `find` searches only jot text and `done_note`, so it finds another session only if a jot there names the ticket or PR. D2 is a scope cut and doesn't depend on this, so it doesn't block the merge | `internal/app/sessions.go:86-131`, `store.go:378-382` |
+| The name `activity` is free | ✅ no command, tool or function uses it | grep; `cmd/aside/main.go:52-72` |
+
+## Out of scope
+- An `aside update` that decides by itself, whether by heuristic or LLM.
+- Write tools on the MCP server.
+- GitHub or Jira lookups from aside.
+- Jots actioned in a different session (D2).
+- Auto-closing clear cases (D1).
+
+## Risks
+- **Prompt injection through transcripts:** transcripts hold tool output and cross-session messages (#31's has one). `activity` output is untrusted data, and the skill has to say so (D5).
+- **False "done":** a session that only discussed the jot may read as having done it. D1's approval step is the guard; the note has to name the evidence so the user can check it.
+- **Cost:** a single `activity` call on a long session is bounded by the cap; "update all" is bounded by the per-run limit (D5).
