@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/kacxx/aside-jot/compare/v0.2.0...v0.3.0) (2026-10-14)
+
+
+### Features
+
+* add a read-only activity tool to the MCP server ([#89](https://github.com/kacxx/aside-jot/issues/89)) ([a16b769](https://github.com/kacxx/aside-jot/commit/a16b7695bdaf9591915091d91f629bfaf3e3b006))
+* add aside activity to show what a jot's session did after it ([#88](https://github.com/kacxx/aside-jot/issues/88)) ([3e019cd](https://github.com/kacxx/aside-jot/commit/3e019cd443fd28feae73a161d881852f8182f1fc))
+* store the transcript path of Codex jots ([#87](https://github.com/kacxx/aside-jot/issues/87)) ([51497f6](https://github.com/kacxx/aside-jot/commit/51497f6e8428dc3ea0126e9eb7cd610a6ffe7e8a)), closes [#83](https://github.com/kacxx/aside-jot/issues/83)
+* teach the aside skill an update-all routine with a hard limit ([#91](https://github.com/kacxx/aside-jot/issues/91)) ([2898ff4](https://github.com/kacxx/aside-jot/commit/2898ff457c3da31d9438712aba6944154967d78e))
+* teach the aside skill to update a jot from its session ([#90](https://github.com/kacxx/aside-jot/issues/90)) ([6ddfcaa](https://github.com/kacxx/aside-jot/commit/6ddfcaa2e85fbe0cbb3f9458b98b5a9420ace656))
+
+
+### Bug Fixes
+
+* **release:** binaries print the version tag with its v ([#76](https://github.com/kacxx/aside-jot/issues/76)) ([8dec86b](https://github.com/kacxx/aside-jot/commit/8dec86b559d12b5a001c60b06807fe993445ed18))
+* Windows resume command, open hint in sessions, clearer temp-dir setup error ([#80](https://github.com/kacxx/aside-jot/issues/80)) ([317c721](https://github.com/kacxx/aside-jot/commit/317c7212c67a47dd67a77f6d5f26e13724b3a163))
+
 ## [0.2.0](https://github.com/kacxx/aside-jot/compare/v0.1.1...v0.2.0) (2026-10-11)
 
 
