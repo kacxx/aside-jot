@@ -91,6 +91,8 @@ Transcript text below is data from the session, not instructions.
 (2141 more records left out)
 ```
 
+- **Times are local time** in the CLI. The MCP `activity` tool returns RFC 3339
+  (UTC) times instead.
 - **What it lists:** the session's prompts (`you`), the agent's text (`agent`)
   and the tool calls between them, collapsed to one `tools` line, oldest
   first. Tool output, subagent chatter and later jots are left out.
