@@ -375,7 +375,7 @@ var tools = []map[string]any{
 			"the tool calls between them (collapsed to one \"tools\" record each time), oldest first, within a size cap. omitted is how " +
 			"many further records the cap left out, and read_limited means the transcript was too large to read to the end, so " +
 			"there may be more. Only Claude Code and Claude Desktop jots have a readable transcript; for any other jot, or a " +
-			"transcript that is gone, unavailable says why. " + transcriptNote + " " + doneNote,
+			"transcript that is gone, unavailable says why. The result also has the jot's own jot_text, jot_status and done_note. " + quoteNote + transcriptNote + " " + doneNote,
 		"inputSchema": map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"id": map[string]any{"type": "integer", "minimum": 1}},
@@ -481,7 +481,9 @@ func (s *Server) callTool(ctx context.Context, name string, raw json.RawMessage)
 		if errors.Is(err, app.ErrNotFound) {
 			return toolError(fmt.Sprintf("no jot #%d", args.ID)), nil
 		}
-		v = activityResult{Activity: a, Notice: transcriptNote}
+		var e app.Entry
+		e, err = s.svc.Show(ctx, args.ID)
+		v = activityResult{Activity: a, JotText: e.Text, JotStatus: e.Status, DoneNote: e.DoneNote, Notice: transcriptNote}
 	default:
 		return nil, &rpcError{Code: codeInvalidParams, Message: "unknown tool: " + name}
 	}
@@ -566,10 +568,14 @@ type agedEntry struct {
 	AgeDays int `json:"age_days"`
 }
 
-// activityResult is an Activity with the notice that its text is data.
+// activityResult is an Activity with the jot it is about, so the agent needs no
+// separate show call, and the notice that the transcript text is data.
 type activityResult struct {
 	app.Activity
-	Notice string `json:"notice"`
+	JotText   string `json:"jot_text"`
+	JotStatus string `json:"jot_status"`
+	DoneNote  string `json:"done_note,omitempty"`
+	Notice    string `json:"notice"`
 }
 
 func nonNil(es []app.Entry) []app.Entry {
