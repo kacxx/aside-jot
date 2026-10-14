@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/kacxx/aside-jot/internal/app"
+	"github.com/kacxx/aside-jot/internal/store"
 )
 
 // CodexBlock is the Codex UserPromptSubmit output that blocks a prompt; the
@@ -24,6 +25,11 @@ func Codex(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) error
 		},
 		parse: parsePrompt("codex", func(in PromptInput) map[string]any {
 			m := map[string]any{}
+			// Nothing reads a Codex transcript yet; the path is kept so that a
+			// reader can be added later for jots already captured.
+			if in.TranscriptPath != "" {
+				m[store.MetaTranscriptPath] = in.TranscriptPath
+			}
 			if in.TurnID != "" {
 				m["turn_id"] = in.TurnID
 			}
