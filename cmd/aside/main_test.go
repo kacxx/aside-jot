@@ -64,7 +64,7 @@ func TestCLIFlow(t *testing.T) {
 func init() {
 	resumeAPI = "cd /work/api && claude --resume c1"
 	if runtime.GOOS == "windows" {
-		resumeAPI = `cd "/work/api"; claude --resume c1`
+		resumeAPI = `Set-Location -LiteralPath "/work/api"; claude --resume c1`
 	}
 }
 

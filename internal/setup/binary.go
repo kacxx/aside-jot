@@ -62,7 +62,7 @@ func (b Binary) Resolve() (string, error) {
 	}
 	p = filepath.Clean(p)
 	if isTemporary(p, tmp, evalLinks) {
-		return "", fmt.Errorf("refusing to write %s: it is in a temporary directory (`go run` builds there), so the hook would stop working; move the binary to a folder it will stay in (such as ~/.local/bin), or run `go install github.com/kacxx/aside-jot/cmd/aside@latest`, and run setup from there", p)
+		return "", fmt.Errorf("refusing to write %s: it is in a temporary directory (`go run` builds there), so the hook would stop working; move the binary to a folder it will stay in, or run `go install github.com/kacxx/aside-jot/cmd/aside@latest`, and run setup from there", p)
 	}
 	return p, nil
 }

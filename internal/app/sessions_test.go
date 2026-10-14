@@ -186,8 +186,12 @@ func TestResumeCommandWindows(t *testing.T) {
 	resumeGOOS = "windows"
 	t.Cleanup(func() { resumeGOOS = old })
 	s := Session{Source: "claude", ID: "abc-1", Cwd: `C:\Users\me\my repo`}
-	if got, want := s.ResumeCommand(), `cd "C:\Users\me\my repo"; claude --resume abc-1`; got != want {
+	if got, want := s.ResumeCommand(), `Set-Location -LiteralPath "C:\Users\me\my repo"; claude --resume abc-1`; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+	s.Cwd = `C:\repo[1]`
+	if got, want := s.ResumeCommand(), `Set-Location -LiteralPath "C:\repo[1]"; claude --resume abc-1`; got != want {
+		t.Errorf("brackets: got %q, want %q", got, want)
 	}
 }
 

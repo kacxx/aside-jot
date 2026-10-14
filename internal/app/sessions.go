@@ -59,8 +59,9 @@ func (s Session) ResumeCommand() string {
 		// resume from there.
 		if resumeGOOS == "windows" {
 			// Windows PowerShell 5.1 has no &&, and cmd.exe doesn't take single
-			// quotes; a double-quoted cd and ; run in PowerShell.
-			return "cd " + powershellQuote(s.Cwd) + "; " + cmd
+			// quotes; a double-quoted path and ; run in PowerShell. -LiteralPath,
+			// because cd (Set-Location -Path) treats [ and ] as wildcards.
+			return "Set-Location -LiteralPath " + powershellQuote(s.Cwd) + "; " + cmd
 		}
 		return "cd " + shellQuote(s.Cwd) + " && " + cmd
 	case "codex":
