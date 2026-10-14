@@ -70,12 +70,18 @@ it can't spend a pile of tokens on stale sessions.
 - **Which jots:** `inbox` with `limit` 200 (the most it returns), keeping jots
   that have a `session_id`, oldest first. If it returns 200, there may be older
   jots it didn't list; say so.
-- **Limit: 20 jots per run.** Update the 20 oldest Claude Code and Claude
-  Desktop jots (`source` is `claude`), and say how many more you skipped and
-  that the user can ask again after closing some. Don't go past 20.
+- **Group by session.** Jots from the same `session_id` share one transcript.
+  Call `activity` once per session, for its oldest open jot, and judge that
+  session's later jots from the same records. Where the cap cut records off
+  before a later jot, answer "can't tell" for it.
+- **Limit: about 10 sessions per run.** Each `activity` call can return around
+  13 KB, so ten sessions is roughly 130 KB. Update the 10 sessions with the
+  oldest open Claude Code and Claude Desktop jots (`source` is `claude`), and
+  say how many sessions and jots you skipped and that the user can ask again
+  after closing some. Don't go past 10 sessions.
 - **Other sources:** don't call `activity` for jots from Codex or Cursor; their
   transcripts aren't read. List them in one line as "can't tell". They don't
-  count toward the 20.
+  count toward the 10.
 - **One verdict per jot** (done, no sign yet, can't tell), with the evidence
   for each, as above. Keep each to a line or two so the whole answer can be
   read at a glance, and put the "done" ones first.
