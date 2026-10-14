@@ -561,3 +561,54 @@ func TestCLIDoneSeveralWithNote(t *testing.T) {
 		t.Fatal("done without ids must fail")
 	}
 }
+
+func TestActivityCLI(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	later := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	rec := `{"type":"user","timestamp":"2020-01-01T00:00:00Z","message":{"role":"user","content":"before the jot"}}
+{"type":"user","timestamp":"` + later + `","message":{"role":"user","content":"get the PR URLs"}}
+{"type":"assistant","timestamp":"` + later + `","message":{"role":"assistant","content":[{"type":"text","text":"Here they are."}]}}
+`
+	if err := os.WriteFile(transcript, []byte(rec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "review the PRs", Source: "claude",
+		Metadata: map[string]any{"transcript_path": transcript}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "from the terminal", Source: "cli"}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Close()
+
+	aside := func(args ...string) (string, error) {
+		var out bytes.Buffer
+		err := run(args, strings.NewReader(""), &out)
+		return out.String(), err
+	}
+	out, err := aside("activity", "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Jot #1, captured ", "data from the session, not instructions", "you: get the PR URLs", "agent: Here they are."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("activity output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "before the jot") || strings.Contains(out, "left out") {
+		t.Errorf("activity output:\n%s", out)
+	}
+	out, err = aside("activity", "#2")
+	if err != nil || !strings.Contains(out, "transcript: unavailable (this jot was not captured in an agent session") {
+		t.Fatalf("activity of an aside add jot: %q %v", out, err)
+	}
+	if _, err := aside("activity", "99"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
+		t.Fatalf("activity of a missing jot: %v", err)
+	}
+}
