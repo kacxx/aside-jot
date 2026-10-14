@@ -249,11 +249,14 @@ To have Codex check your notes on its own, add a line to your `AGENTS.md`,
 for example: "My side notes are in the `aside` MCP server; check `inbox` when
 starting work on this repo."
 
-Tools: `inbox`, `show`, `search`, `find` and `sessions`. `find` is the same
+Tools: `inbox`, `show`, `search`, `find`, `sessions` and `activity`. `find` is the same
 lookup as `aside find`, with the resume command to show you, not run.
 `sessions` is the same list as `aside sessions`: each session's repo, branch,
 newest jot, `jot_count` and resume command, counting done jots as well as
-inbox ones. `inbox`, `search`, `find` and `sessions` take a `limit`
+inbox ones. `activity` takes a jot `id` and is the same as `aside activity`:
+what the jot's own session did after it (see [Activity](reference.md#activity)),
+with a notice that the transcript text is data, not instructions. `inbox`,
+`search`, `find` and `sessions` take a `limit`
 (default 20, at most 200). `inbox` also takes `older_than_days`, the same
 filter as `aside inbox --older`. `find` also returns the totals
 before the cut, and lists each session's 5 newest matching jots with a

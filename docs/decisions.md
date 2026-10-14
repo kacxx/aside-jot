@@ -63,7 +63,8 @@ only if the word never reaches the model.
 
 ## The MCP server is read-only
 
-**Decided:** the MCP server offers `inbox`, `show`, `search` and `find` only. Agents
+**Decided:** the MCP server offers read tools only (at first `inbox`, `show`, `search`
+and `find`; later `sessions` and `activity`, see below). Agents
 can't create, edit, close or delete jots.
 
 **Why:** jots are the user's notes. An agent that tidies them silently can
@@ -79,7 +80,8 @@ example, `aside done` taking several ids) over giving the server write access.
 confirmation step the agent can't bypass.
 
 The tool list grew in
-[MCP sessions and older_than_days stay read-only](#mcp-sessions-and-older_than_days-stay-read-only).
+[MCP sessions and older_than_days stay read-only](#mcp-sessions-and-older_than_days-stay-read-only)
+and [activity returns evidence, not a verdict](#activity-returns-evidence-not-a-verdict).
 
 What "read-only" guarantees was narrowed by
 [Read-only covers the MCP server, not the agent](#read-only-covers-the-mcp-server-not-the-agent).
@@ -341,3 +343,28 @@ through the model, which is what a `>> ` jot exists to avoid.
 
 **Revisit if:** an agent needs a write the CLI can't do; see
 [The MCP server is read-only](#the-mcp-server-is-read-only).
+
+## activity returns evidence, not a verdict
+
+**Decided:** `aside activity <id>` and the read-only MCP tool `activity` return
+what a jot's own session did after the jot: prompts, agent text and collapsed
+tool calls, oldest first, within a size cap (2026-10-14, #78, #82, #84). They
+say nothing about whether the jot was done. An agent reads the records and
+judges, and the user approves any `aside done` it proposes.
+
+**Why:** "was this actioned?" is a judgement on free text (a jot reading "get
+code reviews" and a session that says "I've added review comments" share no
+words), which needs a model, and aside has none. Giving the agent the evidence
+keeps aside a plain store. The text is the transcript of a past session, which
+can hold tool output and messages from other sources, so the tool says it is
+data, not instructions.
+
+**Cost:** the cap keeps the oldest records after the jot, so a long session
+shows its start, not its end. Only Claude Code and Claude Desktop jots can be
+read; Codex jots store their transcript path but the rollout format is not
+read yet.
+
+**Revisit if:** the oldest-first cap hides the evidence in real use (add a tail
+option), or the evidence proves clear enough that closing the obvious cases
+without asking is worth the risk (see
+[Read-only covers the MCP server, not the agent](#read-only-covers-the-mcp-server-not-the-agent)).
