@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kacxx/aside-jot/internal/app"
+	"github.com/kacxx/aside-jot/internal/store"
 )
 
 const codexJot = ">> retry budget in the payments client looks unbounded, check before release"
@@ -79,9 +80,24 @@ func TestCodexCapture(t *testing.T) {
 	if err := json.Unmarshal(e.Metadata, &meta); err != nil {
 		t.Fatalf("metadata %s: %v", e.Metadata, err)
 	}
-	want := map[string]any{"turn_id": "0199a2c5-1f22-7c8e-a4b0-93d1e57a2c6f", "model": "gpt-5-codex"}
-	if len(meta) != len(want) || meta["turn_id"] != want["turn_id"] || meta["model"] != want["model"] {
+	want := map[string]any{
+		"turn_id":                "0199a2c5-1f22-7c8e-a4b0-93d1e57a2c6f",
+		"model":                  "gpt-5-codex",
+		store.MetaTranscriptPath: "/Users/dev/.codex/sessions/2026/09/29/rollout-2026-09-29T10-14-03-0199a2c4-5e7b-7f10-8d3a-6b2e9c41f0d8.jsonl",
+	}
+	if len(meta) != len(want) || meta["turn_id"] != want["turn_id"] || meta["model"] != want["model"] ||
+		meta[store.MetaTranscriptPath] != want[store.MetaTranscriptPath] {
 		t.Fatalf("metadata = %v, want %v", meta, want)
+	}
+}
+
+func TestCodexCaptureStoresTranscriptPath(t *testing.T) {
+	open, path := tempDB(t)
+	const rollout = "/Users/dev/.codex/sessions/2026/10/02/rollout-2026-10-02T09-00-00-0199a2c4.jsonl"
+	runCodex(t, fixture(t, "codex", "capture", map[string]any{"transcript_path": rollout}), open)
+	var meta map[string]any
+	if e := entries(t, path)[0]; json.Unmarshal(e.Metadata, &meta) != nil || meta[store.MetaTranscriptPath] != rollout {
+		t.Fatalf("metadata = %s, want transcript_path %q", e.Metadata, rollout)
 	}
 }
 
