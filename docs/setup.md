@@ -74,8 +74,9 @@ agents.
 - **The binary path** is the one aside was started as, made absolute, with
   symlinks left alone: a resolved path pins one install and breaks when the
   tool is upgraded through a symlink. A binary in a temporary directory, such
-  as the one `go run` builds, is refused, since the hook would vanish; run
-  `go install` first. A path with a space is quoted for the shell (single
+  as the one `go run` builds or an archive unzipped in `%TEMP%`, is refused, since
+  the hook would vanish; move the binary somewhere permanent or run `go install`
+  first. A path with a space is quoted for the shell (single
   quotes on macOS and Linux, double quotes and forward slashes on Windows).
 - **Merging.** Everything else in the file keeps its order and content. Only
   whitespace can change (the file is rewritten with two-space indentation).
@@ -230,6 +231,15 @@ For Codex, the same entry in `~/.codex/config.toml`:
 [mcp_servers.aside]
 command = "/Users/you/go/bin/aside"
 args = ["mcp"]
+```
+
+Codex doesn't pass your shell's environment to MCP servers, so a `JOT_DB` set
+in the shell never reaches `aside mcp`. If you use a custom database path, put
+it in the entry:
+
+```toml
+[mcp_servers.aside.env]
+JOT_DB = "/path/to/jot.db"
 ```
 
 For Cursor, merge this into the `mcpServers` object in `~/.cursor/mcp.json`:
