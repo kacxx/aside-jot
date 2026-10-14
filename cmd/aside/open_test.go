@@ -155,8 +155,8 @@ func TestOpenCLIDesktop(t *testing.T) {
 		t.Fatalf("find output has no open command for the newest jot:\n%s", out.String())
 	}
 	out.Reset()
-	if err := run([]string{"sessions"}, strings.NewReader(""), &out); err != nil || strings.Contains(out.String(), "aside open") {
-		t.Fatalf("sessions should not print open commands: err=%v\n%s", err, out.String())
+	if err := run([]string{"sessions"}, strings.NewReader(""), &out); err != nil || !strings.Contains(out.String(), "\n  aside open 3\n") {
+		t.Fatalf("sessions has no open command for the newest jot: err=%v\n%s", err, out.String())
 	}
 }
 

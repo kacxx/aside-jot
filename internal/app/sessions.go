@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -42,6 +43,9 @@ func (s Session) LabelText() string {
 	return line
 }
 
+// resumeGOOS is the OS the resume command is written for; tests replace it.
+var resumeGOOS = runtime.GOOS
+
 // ResumeCommand returns a shell command that reopens the session, or "" if
 // its agent has no resume command aside knows about.
 func (s Session) ResumeCommand() string {
@@ -53,6 +57,12 @@ func (s Session) ResumeCommand() string {
 		}
 		// Claude Code stores sessions under the directory they started in, so
 		// resume from there.
+		if resumeGOOS == "windows" {
+			// Windows PowerShell 5.1 has no &&, and cmd.exe doesn't take single
+			// quotes; a double-quoted path and ; run in PowerShell. -LiteralPath,
+			// because cd (Set-Location -Path) treats [ and ] as wildcards.
+			return "Set-Location -LiteralPath " + powershellQuote(s.Cwd) + "; " + cmd
+		}
 		return "cd " + shellQuote(s.Cwd) + " && " + cmd
 	case "codex":
 		// Codex finds a session from any directory; a cd would only make the
@@ -232,6 +242,12 @@ func cutSessionPrefix(text string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(text[len(SessionPrefix):]), true
+}
+
+// powershellQuote double-quotes s for PowerShell, which escapes with a backtick.
+func powershellQuote(s string) string {
+	r := strings.NewReplacer("`", "``", `"`, "`\"", "$", "`$")
+	return `"` + r.Replace(s) + `"`
 }
 
 // shellQuote quotes s for a POSIX shell unless it only has safe characters.
