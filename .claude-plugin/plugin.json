@@ -1,7 +1,7 @@
 {
   "name": "aside",
   "version": "0.4.0",
-  "description": "Read and act on your aside jots: check the inbox, find where you worked, and \"update jot N\" to see whether a jot was done. Needs aside 0.4.0 or later installed, `aside setup claude` run (the hook that records jots), and the aside MCP server added (this release of the skill takes the path to aside from its tool descriptions).",
+  "description": "Read and act on your aside jots: check the inbox, find where you worked, and \"update jot N\" to see whether a jot was done. Needs aside 0.4.0 or later installed and `aside setup claude` run (the hook that records jots); the aside MCP server is recommended.",
   "author": {
     "name": "kacxx",
     "url": "https://github.com/kacxx"
