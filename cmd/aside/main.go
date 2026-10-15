@@ -160,7 +160,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 			if err != nil {
 				return err
 			}
-			text = string(b)
+			// Windows PowerShell can prepend a byte order mark to piped text.
+			text = strings.TrimPrefix(string(b), "\ufeff")
 		}
 		cwd, _ := os.Getwd()
 		e, err := svc.Capture(ctx, app.CaptureRequest{Text: text, Source: "cli", Cwd: cwd})
