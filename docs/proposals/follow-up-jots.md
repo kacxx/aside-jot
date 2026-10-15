@@ -67,7 +67,7 @@ A single-quoted here-string expands nothing, as with D4. This issue also include
 
 ### D10: Run `done` only if `add` succeeded
 
-The offered command makes `aside done` depend on `aside add` succeeding: on macOS and Linux, they're chained with `&&` on the heredoc's first line, and on Windows, the `done` line is wrapped in `if ($LASTEXITCODE -eq 0) { … }`. This stops the original closing with "follow-up added as a new jot" when no follow-up was added.
+The offered command makes `aside done` depend on `aside add` succeeding: on macOS and Linux, they're chained with `&&` on the heredoc's first line, and on Windows, the `done` line is wrapped in `if ($?) { … }`. `$?` is used, not `$LASTEXITCODE`, because `$LASTEXITCODE` is not updated when `aside.exe` can't be started, so a stale 0 would let `done` run (confirmed on Windows PowerShell 5.1.19041, 2026-10-15). This stops the original closing with "follow-up added as a new jot" when no follow-up was added.
 
 ### D11: A "partly done" verdict
 
@@ -117,7 +117,7 @@ Set-Location -LiteralPath '<repo root>'
 @'
 follow-up to #29: <the open work>
 '@ | & 'C:\path\to\aside.exe' add
-if ($LASTEXITCODE -eq 0) { & 'C:\path\to\aside.exe' done 29 --note "<evidence>; follow-up added as a new jot" }
+if ($?) { & 'C:\path\to\aside.exe' done 29 --note "<evidence>; follow-up added as a new jot" }
 ```
 
 Defaults the decisions leave to the implementer:
@@ -165,5 +165,5 @@ Defaults the decisions leave to the implementer:
 - **Terminator lines.** A follow-up line that is exactly `EOF` would end the heredoc early, and on Windows a line starting with `'@` (or a curly `’@`, since PowerShell treats curly quotes as quotes) would end the here-string. A one-line follow-up in the agent's words makes this unlikely.
 - **Non-ASCII on Windows.** What reaches aside depends on the user's `$OutputEncoding`: under Windows PowerShell 5.1's default ASCII, any non-ASCII character becomes `?`. Shape keeps the Windows text ASCII, which arrives intact under any setting. PowerShell 7 defaults to UTF-8 and is unaffected.
 - **Git Bash on Windows (D15).** The agent picks the form from aside's path, so a Git Bash user gets the PowerShell form and has to adapt it.
-- **`Set-Location` failing on Windows.** The `$LASTEXITCODE` check (D10) covers `aside add`, not `Set-Location`. If the folder can't be entered, the follow-up is still added, from whatever folder the user is in.
+- **`Set-Location` failing on Windows.** The `$?` check (D10) covers `aside add`, not `Set-Location`. If the folder can't be entered, the follow-up is still added, from whatever folder the user is in.
 - **"Tracked elsewhere" is the agent's call (D1).** It can miss a ticket and offer a duplicate follow-up. The user approves every `add`, so the cost is one extra jot.

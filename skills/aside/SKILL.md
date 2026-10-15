@@ -93,14 +93,16 @@ evidence; you judge it.
      form, any other path gets the heredoc. It changes location with
      `-LiteralPath` (so folders with brackets work), pipes a single-quoted
      here-string (nothing in it expands) into `aside.exe add`, and runs the
-     `done` only if the add succeeded:
+     `done` only if the add succeeded. The `if ($?)` line must come straight
+     after the `add` line: `$?` is false when `aside.exe` exits non-zero or
+     can't be started, where `$LASTEXITCODE` would keep a stale 0:
 
      ```powershell
      Set-Location -LiteralPath '<repo root>'
      @'
      follow-up to #29: <the open work>
      '@ | & 'C:\path\to\aside.exe' add
-     if ($LASTEXITCODE -eq 0) { & 'C:\path\to\aside.exe' done 29 --note "<note>; follow-up added as a new jot" }
+     if ($?) { & 'C:\path\to\aside.exe' done 29 --note "<note>; follow-up added as a new jot" }
      ```
 
      Leave out the `Set-Location` line under the same conditions as above. Keep
