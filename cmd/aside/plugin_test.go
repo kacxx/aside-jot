@@ -39,16 +39,23 @@ func TestPluginVersionsMatchRelease(t *testing.T) {
 
 	var market struct {
 		Plugins []struct {
+			Name   string `json:"name"`
 			Source struct {
 				Ref string `json:"ref"`
 			} `json:"source"`
 		} `json:"plugins"`
 	}
 	read(".claude-plugin/marketplace.json", &market)
-	if len(market.Plugins) == 0 {
-		t.Fatal("marketplace.json has no plugins")
+	ref, found := "", false
+	for _, p := range market.Plugins {
+		if p.Name == "aside" {
+			ref, found = p.Source.Ref, true
+		}
 	}
-	if got, want := market.Plugins[0].Source.Ref, "v"+release; got != want {
-		t.Errorf("marketplace.json plugin ref = %q, want %q", got, want)
+	if !found {
+		t.Fatal(`marketplace.json has no "aside" plugin`)
+	}
+	if want := "v" + release; ref != want {
+		t.Errorf("marketplace.json aside ref = %q, want %q", ref, want)
 	}
 }
