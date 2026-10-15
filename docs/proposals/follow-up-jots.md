@@ -1,6 +1,6 @@
 # Follow-up jots when closing a jot (#95): proposal
 
-Status: **decided**. Sliced into #97, #98 and #99.
+Status: **decided**. Sliced into #97, #98, #99 and #102 (D9's CLI fix, split out of #98).
 Source: #95
 
 Decisions D1 to D9 come from the grill on #95 (2026-10-14), recorded in the issue body. D10 to D15 come from a second grill on the review comment on #95 (2026-10-14).
@@ -123,7 +123,7 @@ if ($?) { & 'C:\path\to\aside.exe' done 29 --note "<evidence>; follow-up added a
 Defaults the decisions leave to the implementer:
 - The repo root is the `root:` line of `aside show <id>` on the CLI, or the `repo_root` field of the MCP `show` tool, which the skill reads first. If the jot has no repo root, or the folder no longer exists, the `cd` / `Set-Location` line is left out, and on macOS and Linux the chain starts at `aside add` (D8).
 - A repo root containing a single quote is also left out, rather than escaped.
-- On Windows the follow-up text is plain ASCII (no curly quotes or em dashes). What Windows PowerShell 5.1 sends to a native program depends on the user's `$OutputEncoding`: the default is ASCII, which turns other characters into `?`, and the BOM seen on #77 means that machine had a different setting. ASCII text arrives intact either way.
+- On Windows the follow-up text is plain ASCII (no curly quotes or em dashes). What Windows PowerShell 5.1 sends to a native program depends on the user's `$OutputEncoding`: the default is ASCII, which turns other characters into `?`. ASCII text arrives intact under any setting. A piped here-string arrives with a leading BOM under both the default and UTF-8, which the CLI change below strips.
 
 **CLI (`cmd/aside/main.go`, `add`):** when the text comes from stdin, strip one leading U+FEFF before `Capture` (D9). Tests in `cmd/aside/main_test.go`: stdin `"\ufeffbom jot\r\n"` is stored as `bom jot`, and stdin that is only a BOM is treated as empty, like empty stdin. Text given as arguments is unchanged. This change doesn't depend on the skill changes and can ship first.
 
@@ -147,7 +147,8 @@ Defaults the decisions leave to the implementer:
 | A BOM is stripped only when reading config files | ✅ | `internal/setup/config.go:43`; no other BOM handling in `*.go` |
 | `"text" \| aside add` in Windows PowerShell 5.1 stored U+FEFF | ✅ | owner, Windows results on #77 ("BOM from a PowerShell pipe is stored") |
 | #80 left the PowerShell-pipe BOM for later | ✅ | #80 description ("Left for later: the BOM from a PowerShell pipe into `aside add`") |
-| Windows PowerShell 5.1 pipes to native programs in `$OutputEncoding`, which defaults to ASCII | ✅. ASCII has no BOM, so the BOM seen on #77 means that session's `$OutputEncoding` wasn't the default | [about_Preference_Variables (5.1)](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables?view=powershell-5.1#outputencoding): "Default: ASCIIEncoding object" |
+| Windows PowerShell 5.1 pipes to native programs in `$OutputEncoding`, which defaults to ASCII | ✅ | [about_Preference_Variables (5.1)](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables?view=powershell-5.1#outputencoding): "Default: ASCIIEncoding object" |
+| A here-string piped into `aside.exe add` in Windows PowerShell 5.1 arrives with a leading BOM under the default ASCII `$OutputEncoding`, not only under UTF-8 | ✅ (an earlier version of this doc inferred the default sends no BOM) | owner, [Windows run on #106](https://github.com/kacxx/aside-jot/pull/106#issuecomment-6183806372) |
 | In bash and zsh, `cd … && aside add <<'EOF' && aside done …` skips `done` when the `cd` or the `add` fails, and still expands nothing in the heredoc | ✅ | probe in zsh and bash with stand-ins: a missing folder and a failing command each skipped the last command; `$(echo PWNED)` and `` `id` `` passed through literally |
 | `aside add` with empty stdin fails with "empty jot" | ✅ | `internal/app/app.go` (`CaptureOnce`: `errors.New("empty jot")`); probe: exit status 1 |
 | The MCP `show` tool returns the jot's `repo_root` | ✅ | `internal/mcp/server.go:428-440` returns the `app.Entry`; `internal/store/store.go:83` (`json:"repo_root,omitempty"`) |
