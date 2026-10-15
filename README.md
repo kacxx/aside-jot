@@ -232,17 +232,37 @@ little or nothing does.
 The aside skill tells an agent how to use those tools: "update jot 12" checks
 the jot's session for signs it was done and offers `aside done` with a note,
 plus a follow-up jot for any open work left behind; "update all" does the same
-across the inbox. It needs the MCP server above. Copy it from this repo:
+across the inbox.
+
+In Claude Code, in the terminal or in Claude Desktop, install it as a plugin:
+
+```text
+/plugin marketplace add kacxx/aside-jot
+/plugin install aside@aside-jot
+```
+
+You get the skill from the last release, not from whatever is on `main`. Update
+it with `claude plugin update aside@aside-jot`. It needs aside 0.4.0 or later
+installed, `aside setup claude` run (that hook records the jots), and the MCP
+server above added: the plugin is pinned to the 0.4.0 skill, which takes the
+path to aside from the MCP tool descriptions. The skill in this repo also works
+without the MCP server (with `aside` on your `PATH`), but plugin installs don't
+get it until the pin moves to a release that has it.
+
+If you copied the skill into `~/.claude/skills/aside` by hand, remove that copy
+when you install the plugin, so the two don't drift apart.
+
+Codex, and any other host the plugin doesn't reach, take a manual copy of the
+skill from this repo:
 
 ```sh
 git clone https://github.com/kacxx/aside-jot.git
-mkdir -p ~/.claude/skills && cp -R aside-jot/skills/aside ~/.claude/skills/   # Claude Code
 mkdir -p ~/.agents/skills && cp -R aside-jot/skills/aside ~/.agents/skills/   # Codex
 ```
 
-In PowerShell, use `Copy-Item -Recurse -Force aside-jot\skills\aside "$HOME\.claude\skills\"`
-(create the folder first if it doesn't exist). Copy it again after updating aside, so the skill matches the binary. A Claude
-Code plugin that installs and updates it for you is planned (#110).
+In PowerShell, use `Copy-Item -Recurse -Force aside-jot\skills\aside "$HOME\.agents\skills\"`
+(create the folder first if it doesn't exist). Copy it again after updating
+aside, so the skill matches the binary.
 
 ## All commands
 

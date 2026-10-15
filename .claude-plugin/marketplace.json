@@ -1,0 +1,19 @@
+{
+  "name": "aside-jot",
+  "owner": {
+    "name": "kacxx",
+    "url": "https://github.com/kacxx"
+  },
+  "description": "The aside skill for Claude Code: read and act on jots saved with `>>`.",
+  "plugins": [
+    {
+      "name": "aside",
+      "description": "Read and act on your aside jots: check the inbox, find where you worked, and \"update jot N\" to see whether a jot was done. Needs aside 0.4.0 or later installed, `aside setup claude` run (the hook that records jots), and the aside MCP server added (this release of the skill takes the path to aside from its tool descriptions).",
+      "source": {
+        "source": "github",
+        "repo": "kacxx/aside-jot",
+        "ref": "v0.4.0"
+      }
+    }
+  ]
+}

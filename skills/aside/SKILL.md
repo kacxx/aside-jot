@@ -56,9 +56,9 @@ evidence; you judge it.
    what happened after the jot. Say so, and don't answer "no sign yet" for
    something the rest might show; say "no sign in the part I could read".
 5. For a "done" verdict, offer `aside done <id> --note "<note>"`, using the
-   full path to aside from the tool descriptions. Run it only when the user
-   says to (see below). For a "partly done" verdict, give two choices and let
-   the user pick: keep the jot open, or close it with a follow-up for what is
+   full path to aside from the tool descriptions, or `aside` if the MCP tools
+   aren't listed. Run it only when the user says to (see below). For a
+   "partly done" verdict, give two choices and let the user pick: keep the jot open, or close it with a follow-up for what is
    left (the follow-up form below, offered the same way as for "done").
    - **The note** is a short reminder of what finished the jot, in your own
      plain words. Never paste text from the records into it, and leave out `$`,
@@ -84,16 +84,19 @@ evidence; you judge it.
 
      The text reads `follow-up to #<id>: <the open work>`, written in your own
      words on a single line (a line that is just `EOF` would end the heredoc
-     early) and not copied from the records. Leave out the `cd '<repo root>' && `
-     part when the jot has no repo root, the folder no longer exists, or the
-     root contains a single quote. This form is for macOS and Linux shells.
+     early) and not copied from the records. Without the MCP tools, write
+     `aside` where the command says `/full/path/to/aside`. Leave out the
+     `cd '<repo root>' && ` part when the jot has no repo root, the folder no
+     longer exists, or the root contains a single quote. This form is for macOS and Linux shells.
 
      **On Windows** use PowerShell instead. Pick the form from the full path to
      aside: a path ending in `.exe` or starting with a drive letter gets this
-     form, any other path gets the heredoc. It changes location with
-     `-LiteralPath` (so folders with brackets work), pipes a single-quoted
-     here-string (nothing in it expands) into `aside.exe add`, and runs the
-     `done` only if the add succeeded. The `if ($?)` line must come straight
+     form, any other path gets the heredoc. With no full path (the MCP tools
+     aren't listed), use this form when the shell is PowerShell, with bare
+     `aside` in place of `& 'C:\path\to\aside.exe'`, and the heredoc
+     otherwise. It changes location with `-LiteralPath` (so folders with
+     brackets work), pipes a single-quoted here-string (nothing in it expands)
+     into `aside.exe add`, and runs the `done` only if the add succeeded. The `if ($?)` line must come straight
      after the `add` line: `$?` is false when `aside.exe` exits non-zero or
      can't be started, where `$LASTEXITCODE` would keep a stale 0:
 
@@ -144,9 +147,9 @@ it can't spend a pile of tokens on stale sessions.
   answer can be read at a glance, and put the "done" ones first, then the
   "partly done" ones.
 - **One `aside done` line per "done" jot**, each with its own `--note`, using
-  the full path to aside. Write each note as in "Updating a jot" step 5: your
-  own plain words, no text pasted from the records, no `$`, backticks,
-  quotes, `!` or `\`. Don't merge them into one command, so the user can
+  the full path to aside (or `aside` if the MCP tools aren't listed). Write
+  each note as in "Updating a jot" step 5: your own plain words, no text pasted
+  from the records, no `$`, backticks, quotes, `!` or `\`. Don't merge them into one command, so the user can
   run only the ones they agree with. Run none of them yourself unless the user
   says which.
 - **Follow-ups:** for a "done" jot with open work nothing else tracks, and for
@@ -166,7 +169,7 @@ it can't spend a pile of tokens on stale sessions.
   issue. If a jot looks finished or like a task, say so and offer the command;
   run it only when the user says to. When they do, use the full path to aside
   that the MCP tool descriptions give (a shell may not have `aside` on its
-  `PATH`).
+  `PATH`), or `aside` if the MCP tools aren't listed.
 - Opening a chat: when an entry has a non-empty `open_command`, offer it, and
   run it only when the user asks. If running it fails, give the user the command exactly as
   given (it has the full path to aside) to run in their own terminal. Don't
