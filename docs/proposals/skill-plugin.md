@@ -1,9 +1,9 @@
 # A Claude Code plugin for the aside skill (#110): proposal
 
-Status: **1 open**. Don't merge yet: D7 is reopened, because the fact-check found its premise wrong.
+Status: **decided**. Ready to merge, then slice into tickets.
 Source: #110
 
-Decisions D1 to D7 come from the grill on #110 (2026-10-15), recorded in [the decisions comment](https://github.com/kacxx/aside-jot/issues/110#issuecomment-6187065673). Question 3 in the issue (what happens to `aside setup claude`) no longer applies: under D4 the plugin carries no hook or MCP server.
+Decisions D1 to D7 come from the grill on #110 (2026-10-15), recorded in [the decisions comment](https://github.com/kacxx/aside-jot/issues/110#issuecomment-6187065673). D7 was revised the same day, after this doc's fact-check found its premise wrong. Question 3 in the issue (what happens to `aside setup claude`) no longer applies: under D4 the plugin carries no hook or MCP server.
 
 ## Problem
 
@@ -31,15 +31,15 @@ release-please bumps `version` in `.claude-plugin/plugin.json` through `extra-fi
 ### D6: Names
 The plugin is `aside` and the marketplace is `aside-jot`, so it installs with `/plugin marketplace add kacxx/aside-jot` and `/plugin install aside@aside-jot`. They match the skill's name and the repo's.
 
-### D7: Without aside installed
-Status: reopened — fact-check: the skill falls back to the CLI without the MCP tools (`SKILL.md:26`), and `aside setup claude --mcp` only prints the MCP command, it doesn't run it.
+### D7: Without aside installed (revised 2026-10-15)
+The plugin's description and the README say it needs aside installed and `aside setup claude` run, since that hook is what records the jots. Adding the MCP server (the command `aside setup claude --mcp` prints) is recommended: reads go through read-only tools instead of shell commands, and the tool descriptions give the full path to aside for `done` and `add`. Without it, `aside` must be on `PATH`. The skill itself doesn't change.
+
+<details><summary>Superseded (2026-10-15)</summary>
 
 The plugin's description and the README say it needs aside installed and `aside setup claude --mcp` run first. The skill itself doesn't change. The skill does nothing without aside's MCP tools, so saying so up front saves a confusing first run.
 
-Options for settling it (none chosen):
-- **Installed, MCP recommended:** say it needs aside installed and `aside setup claude` run; the MCP tools (the command `aside setup claude --mcp` prints) are recommended, and without them the skill uses the CLI.
-- **Installed and MCP required:** keep requiring the MCP server, say to run the command `--mcp` prints, and drop the "does nothing without" reason for a true one.
-- **Installed only:** say it needs aside installed, and nothing about setup or MCP.
+Reason: the fact-check found the skill falls back to the CLI without the MCP tools (`SKILL.md:26-28`), and `aside setup claude --mcp` only prints the MCP command, it doesn't run it.
+</details>
 
 ## Shape
 
@@ -64,7 +64,7 @@ so the release PR bumps the plugin with the binary (D5).
 /plugin install aside@aside-jot
 ```
 
-with `claude plugin update aside@aside-jot` to update, and what it needs (D7). It keeps the manual copy for Codex (`~/.agents/skills/`) and anything else the plugin doesn't reach (D1, D2), and tells anyone who copied the skill into `~/.claude/skills/aside` by hand to remove that copy when they install the plugin. The sentence "It needs the MCP server above" changes to match D7, and the "planned (#110)" sentence goes.
+with `claude plugin update aside@aside-jot` to update, and what it needs: aside installed and `aside setup claude` run, with the MCP server recommended (D7). It keeps the manual copy for Codex (`~/.agents/skills/`) and anything else the plugin doesn't reach (D1, D2), and tells anyone who copied the skill into `~/.claude/skills/aside` by hand to remove that copy when they install the plugin. The sentence "It needs the MCP server above" changes to match D7, and the "planned (#110)" sentence goes.
 
 Nothing in the Go code, the skill text, `aside setup` or the release archive changes (D4, D7).
 
@@ -90,9 +90,14 @@ Probes ran on 2026-10-15 at `7825248` (the 0.4.0 release commit), with Claude Co
 | release-please's `extra-files` bumps a JSON field named by `jsonpath` (D5) | ✅ docs | [customizing.md, extra-files](https://github.com/googleapis/release-please/blob/main/docs/customizing.md) |
 | release-please here has no extra files yet | ✅ `release-type: go`, one `.` package | `release-please-config.json` |
 | 0.4.0 shipped with the README stopgap (D3) | ✅ #111 merged 08:13Z, v0.4.0 released 08:13Z on 2026-10-15 | `gh pr view 111`; `gh release list` |
-| D7: "The skill does nothing without aside's MCP tools" | ❌ the skill says that without the MCP tools it runs the same commands through the CLI (`aside inbox`, `aside show`, …) | `skills/aside/SKILL.md:26-28` |
-| D7: running `aside setup claude --mcp` gives the agent the MCP tools | ❌ `--mcp` prints the command that adds the MCP server; it doesn't run it | `README.md:64-65` |
-| The README already says the skill "needs the MCP server above" | ✅ same premise as D7; it changes with D7 | `README.md:225` |
+| Superseded D7: "The skill does nothing without aside's MCP tools" | ❌ the skill says that without the MCP tools it runs the same commands through the CLI (`aside inbox`, `aside show`, …); D7 revised | `skills/aside/SKILL.md:26-28` |
+| Superseded D7: running `aside setup claude --mcp` gives the agent the MCP tools | ❌ `--mcp` prints the command that adds the MCP server; it doesn't run it; D7 revised | `README.md:64-65` |
+| D7: `aside setup claude` adds the hook that records the jots | ✅ it adds the `UserPromptSubmit` hook | `README.md:59`; `cmd/aside/main.go:67-68` |
+| D7: the MCP server's tools are read-only, and `done` and `add` go through the shell | ✅ | `SKILL.md:14`, `SKILL.md:58-59`; `internal/mcp/server.go:248` |
+| D7: the MCP tool descriptions give the full path to aside | ✅ the server fills `{{DONE_COMMAND}}` with the path of its own executable | `internal/mcp/server.go:243-250`, `72`; `SKILL.md:167-169` |
+| D7: without the MCP server, `aside` must be on `PATH` | ✅ the CLI fallback names bare `aside …` commands, and the skill's only source for the full path is the MCP tool descriptions | `SKILL.md:26-28`, `SKILL.md:167-169` |
+| D4: `aside setup` "keeps installing the hook and MCP server" | ⚠️ partly: it installs the hook and prints the MCP command for the user to run. Nothing depends on the difference: D4 leaves setup as it is either way | `README.md:59-65` |
+| The README already says the skill "needs the MCP server above" | ✅ the README edit in Shape changes it to match D7 | `README.md:225` |
 
 ## Out of scope
 
