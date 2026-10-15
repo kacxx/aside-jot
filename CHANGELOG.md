@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/kacxx/aside-jot/compare/v0.3.0...v0.4.0) (2026-10-15)
+
+
+### Features
+
+* **skill:** offer a follow-up jot when closing a jot, keep done notes safe ([#104](https://github.com/kacxx/aside-jot/issues/104)) ([cffde9f](https://github.com/kacxx/aside-jot/commit/cffde9f22528c54f06dfacc6642f606153037493))
+* **skill:** Windows follow-up form, partly done verdict, follow-ups in update all ([#106](https://github.com/kacxx/aside-jot/issues/106)) ([27ec14f](https://github.com/kacxx/aside-jot/commit/27ec14f3050ba6a9ecbc89ae45e743364de0c2e1))
+
+
+### Bug Fixes
+
+* strip a leading byte order mark from aside add stdin ([#107](https://github.com/kacxx/aside-jot/issues/107)) ([e636bd0](https://github.com/kacxx/aside-jot/commit/e636bd04fa67a1aa08ff4e705a1c8b4477d2d4e2))
+
 ## [0.3.0](https://github.com/kacxx/aside-jot/compare/v0.2.0...v0.3.0) (2026-10-14)
 
 
