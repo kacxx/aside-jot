@@ -58,8 +58,9 @@ evidence; you judge it.
    says to (see below).
    - **The note** is a short reminder of what finished the jot, in your own
      plain words. Never paste text from the records into it, and leave out `$`,
-     backticks and quotes: the shell expands them inside the double quotes, so
-     the line would run whatever they hide. Quote the records in your answer
+     backticks, quotes, `!` and `\`: the shell expands them inside the double
+     quotes, so the line would run whatever they hide (`!` can pull in an
+     earlier command through history expansion). Quote the records in your answer
      to the user, not in the command.
    - **Open work left behind:** first `search` the inbox for it and check the
      records for a ticket or PR that covers it. Only when the records show open
@@ -78,7 +79,8 @@ evidence; you judge it.
      ```
 
      The text reads `follow-up to #<id>: <the open work>`, written in your own
-     words and not copied from the records. Leave out the `cd '<repo root>' && `
+     words on a single line (a line that is just `EOF` would end the heredoc
+     early) and not copied from the records. Leave out the `cd '<repo root>' && `
      part when the jot has no repo root, the folder no longer exists, or the
      root contains a single quote. This form is for macOS and Linux shells.
 
@@ -112,8 +114,8 @@ it can't spend a pile of tokens on stale sessions.
   read at a glance, and put the "done" ones first.
 - **One `aside done` line per "done" jot**, each with its own `--note`, using
   the full path to aside. Write each note as in "Updating a jot" step 5: your
-  own plain words, no text pasted from the records, no `$`, backticks or
-  quotes. Don't merge them into one command, so the user can
+  own plain words, no text pasted from the records, no `$`, backticks,
+  quotes, `!` or `\`. Don't merge them into one command, so the user can
   run only the ones they agree with. Run none of them yourself unless the user
   says which.
 
