@@ -1,9 +1,9 @@
 # Follow-up jots when closing a jot (#95): proposal
 
-Status: **decided**. Ready to merge, then slice into tickets.
+Status: **decided**. Sliced into #97, #98 and #99.
 Source: #95
 
-Decisions D1 to D9 come from the grill on #95 (2026-10-14), recorded in the issue body.
+Decisions D1 to D9 come from the grill on #95 (2026-10-14), recorded in the issue body. D10 to D15 come from a second grill on the review comment on #95 (2026-10-14).
 
 ## Problem
 
@@ -65,41 +65,67 @@ follow-up to #29: <the open work>
 
 A single-quoted here-string expands nothing, as with D4. This issue also includes the CLI fix that strips a leading BOM from `aside add`'s stdin, so Windows follow-ups don't start with a stray character.
 
+### D10: Run `done` only if `add` succeeded
+
+The offered command makes `aside done` depend on `aside add` succeeding: on macOS and Linux, they're chained with `&&` on the heredoc's first line, and on Windows, the `done` line is wrapped in `if ($LASTEXITCODE -eq 0) { … }`. This stops the original closing with "follow-up added as a new jot" when no follow-up was added.
+
+### D11: A "partly done" verdict
+
+A fourth verdict, "partly done", sits next to done, no sign yet and can't tell, in both "Updating a jot" and "Updating all jots". It's clearer than a sub-case, and step 5 offers D2's two choices for it.
+
+### D12: No status checks for follow-up jots
+
+"Update" doesn't read the original jot's records for a jot that starts with "follow-up to #N:", for now. The skill says follow-up jots are left out of "Updating all jots" because they have no session. This is the cost D5 already accepted, and nobody has missed it yet.
+
+### D13: How the agent checks D1
+
+Before offering a follow-up, the agent searches the inbox for the open work and checks the records for a ticket or PR that covers it. One sentence in step 5 gives D1 a concrete check.
+
+### D14: No subshell
+
+The command keeps the plain `cd` and `Set-Location`. Ending up in the repo folder is harmless, and a subshell around a heredoc makes the command harder to read.
+
+### D15: The command form still follows aside's path
+
+The rule based on aside's path stays, and Git Bash is listed as a known risk in the proposal. Detecting the user's actual shell adds complexity for an edge case.
+
 ## Shape
 
 **Skill (`skills/aside/SKILL.md`):**
-- "Updating a jot", step 5: when the records show open work and nothing else tracks it (D1), offer the follow-up command before the `aside done` line (D6). The follow-up text is `follow-up to #<id>: <the open work>` in the agent's words (D3), and the done note ends in "; follow-up added as a new jot" (D6).
-- For a partly done jot, offer two options: keep it open, or close it with the follow-up (D2).
-- "Updating all jots": each follow-up line goes under its jot's done line and doesn't count toward the 10 sessions (D7).
+- "Updating a jot", step 3: add the fourth verdict, "partly done" (D11).
+- "Updating a jot", step 5: before offering a follow-up, search the inbox for the open work and check the records for a ticket or PR that covers it (D13). When the records show open work and nothing else tracks it (D1), offer the follow-up command before the `aside done` line (D6). The follow-up text is `follow-up to #<id>: <the open work>` in the agent's words (D3), and the done note ends in "; follow-up added as a new jot" (D6).
+- For a "partly done" verdict, offer two options: keep it open, or close it with the follow-up (D2, D11).
+- "Updating all jots": the "partly done" verdict is used here too (D11). Each follow-up line goes under its jot's done line and doesn't count toward the 10 sessions (D7). Say that follow-up jots are left out because they have no session (D12).
 - "Things to leave to the user" is unchanged: the agent never runs `aside add` itself.
 
-**Command form.** The agent picks the form from the full path to aside it already uses: a path ending in `.exe` or starting with a drive letter gets the Windows form.
+**Command form.** The agent picks the form from the full path to aside it already uses: a path ending in `.exe` or starting with a drive letter gets the Windows form (D15).
 
-macOS and Linux (D4, D8):
+macOS and Linux (D4, D8, D10, D14):
 
 ```
-cd '<repo root>' && /full/path/to/aside add <<'EOF'
+cd '<repo root>' && /full/path/to/aside add <<'EOF' && /full/path/to/aside done 29 --note "<evidence>; follow-up added as a new jot"
 follow-up to #29: <the open work>
 EOF
-/full/path/to/aside done 29 --note "<evidence>; follow-up added as a new jot"
 ```
 
-Windows (D9, D8):
+If the `cd` or the `add` fails, `done` doesn't run (probed in zsh and bash).
+
+Windows (D9, D8, D10, D14):
 
 ```powershell
 Set-Location -LiteralPath '<repo root>'
 @'
 follow-up to #29: <the open work>
 '@ | & 'C:\path\to\aside.exe' add
-& 'C:\path\to\aside.exe' done 29 --note "<evidence>; follow-up added as a new jot"
+if ($LASTEXITCODE -eq 0) { & 'C:\path\to\aside.exe' done 29 --note "<evidence>; follow-up added as a new jot" }
 ```
 
 Defaults the decisions leave to the implementer:
-- The repo root is the `root:` line of `aside show <id>`. If the jot has no repo root, or the folder no longer exists, the `cd` / `Set-Location` line is left out (D8).
+- The repo root is the `root:` line of `aside show <id>` on the CLI, or the `repo_root` field of the MCP `show` tool, which the skill reads first. If the jot has no repo root, or the folder no longer exists, the `cd` / `Set-Location` line is left out, and on macOS and Linux the chain starts at `aside add` (D8).
 - A repo root containing a single quote is also left out, rather than escaped.
-- On Windows the follow-up text is plain ASCII (no curly quotes or em dashes): Windows PowerShell 5.1 pipes text to native programs as ASCII by default, so other characters would arrive as `?`.
+- On Windows the follow-up text is plain ASCII (no curly quotes or em dashes). What Windows PowerShell 5.1 sends to a native program depends on the user's `$OutputEncoding`: the default is ASCII, which turns other characters into `?`, and the BOM seen on #77 means that machine had a different setting. ASCII text arrives intact either way.
 
-**CLI (`cmd/aside/main.go`, `add`):** when the text comes from stdin, strip one leading U+FEFF before `Capture` (D9). Test in `cmd/aside/main_test.go`: stdin `"\ufeffbom jot\r\n"` is stored as `bom jot`. Text given as arguments is unchanged.
+**CLI (`cmd/aside/main.go`, `add`):** when the text comes from stdin, strip one leading U+FEFF before `Capture` (D9). Tests in `cmd/aside/main_test.go`: stdin `"\ufeffbom jot\r\n"` is stored as `bom jot`, and stdin that is only a BOM is treated as empty, like empty stdin. Text given as arguments is unchanged. This change doesn't depend on the skill changes and can ship first.
 
 ## Fact-check
 
@@ -121,7 +147,10 @@ Defaults the decisions leave to the implementer:
 | A BOM is stripped only when reading config files | ✅ | `internal/setup/config.go:43`; no other BOM handling in `*.go` |
 | `"text" \| aside add` in Windows PowerShell 5.1 stored U+FEFF | ✅ | owner, Windows results on #77 ("BOM from a PowerShell pipe is stored") |
 | #80 left the PowerShell-pipe BOM for later | ✅ | #80 description ("Left for later: the BOM from a PowerShell pipe into `aside add`") |
-| Windows PowerShell 5.1 pipes to native programs in `$OutputEncoding`, which defaults to ASCII | ✅ | [about_Preference_Variables (5.1)](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables?view=powershell-5.1#outputencoding): "Default: ASCIIEncoding object" |
+| Windows PowerShell 5.1 pipes to native programs in `$OutputEncoding`, which defaults to ASCII | ✅. ASCII has no BOM, so the BOM seen on #77 means that session's `$OutputEncoding` wasn't the default | [about_Preference_Variables (5.1)](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables?view=powershell-5.1#outputencoding): "Default: ASCIIEncoding object" |
+| In bash and zsh, `cd … && aside add <<'EOF' && aside done …` skips `done` when the `cd` or the `add` fails, and still expands nothing in the heredoc | ✅ | probe in zsh and bash with stand-ins: a missing folder and a failing command each skipped the last command; `$(echo PWNED)` and `` `id` `` passed through literally |
+| `aside add` with empty stdin fails with "empty jot" | ✅ | `internal/app/app.go` (`CaptureOnce`: `errors.New("empty jot")`); probe: exit status 1 |
+| The MCP `show` tool returns the jot's `repo_root` | ✅ | `internal/mcp/server.go:428-440` returns the `app.Entry`; `internal/store/store.go:83` (`json:"repo_root,omitempty"`) |
 
 ## Out of scope
 
@@ -134,5 +163,7 @@ Defaults the decisions leave to the implementer:
 
 - **The existing `--note` is double-quoted.** The skill already offers `aside done <id> --note "<the evidence>"`, and the evidence is drawn from the transcript, so a `$(…)` in it would run when the user runs the command. D4 protects the new `add` line; the `done` line has the same exposure today. Worth its own issue.
 - **Terminator lines.** A follow-up line that is exactly `EOF` would end the heredoc early, and on Windows a line starting with `'@` (or a curly `’@`, since PowerShell treats curly quotes as quotes) would end the here-string. A one-line follow-up in the agent's words makes this unlikely.
-- **Non-ASCII on Windows.** Under Windows PowerShell 5.1's default ASCII encoding, any non-ASCII character becomes `?`. Shape keeps the Windows text ASCII. PowerShell 7 defaults to UTF-8 and is unaffected.
+- **Non-ASCII on Windows.** What reaches aside depends on the user's `$OutputEncoding`: under Windows PowerShell 5.1's default ASCII, any non-ASCII character becomes `?`. Shape keeps the Windows text ASCII, which arrives intact under any setting. PowerShell 7 defaults to UTF-8 and is unaffected.
+- **Git Bash on Windows (D15).** The agent picks the form from aside's path, so a Git Bash user gets the PowerShell form and has to adapt it.
+- **`Set-Location` failing on Windows.** The `$LASTEXITCODE` check (D10) covers `aside add`, not `Set-Location`. If the folder can't be entered, the follow-up is still added, from whatever folder the user is in.
 - **"Tracked elsewhere" is the agent's call (D1).** It can miss a ticket and offer a duplicate follow-up. The user approves every `add`, so the cost is one extra jot.
