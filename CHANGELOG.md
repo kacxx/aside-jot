@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/kacxx/aside-jot/compare/v0.4.0...v0.5.0) (2026-10-15)
+
+
+### Features
+
+* install the aside skill as a Claude Code plugin ([#117](https://github.com/kacxx/aside-jot/issues/117)) ([f22f2d8](https://github.com/kacxx/aside-jot/commit/f22f2d8ef1e62dab1d9646be577c166784e68bfe))
+
 ## [0.4.0](https://github.com/kacxx/aside-jot/compare/v0.3.0...v0.4.0) (2026-10-15)
 
 
