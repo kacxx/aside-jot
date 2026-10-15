@@ -207,6 +207,15 @@ claude mcp add --scope user aside -- /Users/you/go/bin/aside mcp   # Claude Code
 codex mcp add aside -- /Users/you/go/bin/aside mcp                 # Codex
 ```
 
+`$JOT_DB` sets the database path (`aside paths` shows where). Codex doesn't
+pass your shell environment to MCP servers, so a custom `JOT_DB` has to go in
+the `aside` MCP server entry's `env`, not only in the shell:
+
+```toml
+[mcp_servers.aside.env]
+JOT_DB = "/path/to/jot.db"
+```
+
 Then ask the agent things like "what's in my inbox?", "where did I work on
 SUP-4821?" or "which chats have I jotted in recently?". The tools are listed in
 [docs/setup.md](docs/setup.md). The server is **read-only**: through it, agents can read and
