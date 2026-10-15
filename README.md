@@ -243,11 +243,10 @@ In Claude Code, in the terminal or in Claude Desktop, install it as a plugin:
 
 You get the skill from the last release, not from whatever is on `main`. Update
 it with `claude plugin update aside@aside-jot`. It needs aside 0.4.0 or later
-installed, `aside setup claude` run (that hook records the jots), and the MCP
-server above added: the plugin is pinned to the 0.4.0 skill, which takes the
-path to aside from the MCP tool descriptions. The skill in this repo also works
-without the MCP server (with `aside` on your `PATH`), but plugin installs don't
-get it until the pin moves to a release that has it.
+installed and `aside setup claude` run (that hook records the jots). The MCP
+server above is recommended: reads then go through read-only tools instead of
+shell commands, and their descriptions give the agent the full path to aside.
+Without it, `aside` must be on your `PATH`.
 
 If you copied the skill into `~/.claude/skills/aside` by hand, remove that copy
 when you install the plugin, so the two don't drift apart.
