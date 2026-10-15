@@ -218,6 +218,23 @@ first and refuses to run when stdin isn't a terminal, so an agent has to pass
 Your agent's command approval is what guards that, and in auto-approve modes
 little or nothing does.
 
+### Teach your agent the jot routines
+
+The aside skill tells an agent how to use those tools: "update jot 12" checks
+the jot's session for signs it was done and offers `aside done` with a note,
+plus a follow-up jot for any open work left behind; "update all" does the same
+across the inbox. It needs the MCP server above. Copy it from this repo:
+
+```sh
+git clone https://github.com/kacxx/aside-jot.git
+mkdir -p ~/.claude/skills && cp -R aside-jot/skills/aside ~/.claude/skills/   # Claude Code
+mkdir -p ~/.agents/skills && cp -R aside-jot/skills/aside ~/.agents/skills/   # Codex
+```
+
+In PowerShell, use `Copy-Item -Recurse -Force aside-jot\skills\aside "$HOME\.claude\skills\"`
+(create the folder first if it doesn't exist). Copy it again after updating aside, so the skill matches the binary. A Claude
+Code plugin that installs and updates it for you is planned (#110).
+
 ## All commands
 
 | Command | What it does |
