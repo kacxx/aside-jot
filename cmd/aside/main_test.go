@@ -15,6 +15,52 @@ import (
 	"github.com/kacxx/aside-jot/internal/app"
 )
 
+func TestAddStdinBOM(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	add := func(stdin string, args ...string) error {
+		return run(append([]string{"add"}, args...), strings.NewReader(stdin), &bytes.Buffer{})
+	}
+	show := func() string {
+		var out bytes.Buffer
+		if err := run([]string{"show", "1"}, nil, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+
+	if err := add("\ufeffbom jot\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	got := show()
+	if !strings.Contains(got, "bom jot") || strings.Contains(got, "\ufeff") {
+		t.Fatalf("stdin BOM stored: %q", got)
+	}
+
+	for _, in := range []string{"\ufeff", "\ufeff\r\n", ""} {
+		if err := add(in); err == nil || !strings.Contains(err.Error(), "empty jot") {
+			t.Fatalf("stdin %q: want empty jot, got %v", in, err)
+		}
+	}
+
+	// Only one BOM is stripped; the rest of the text is kept as is.
+	if err := add("\ufeff\ufeffx"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"show", "2"}, nil, &out); err != nil || !strings.Contains(out.String(), "\ufeffx") {
+		t.Fatalf("second BOM: %q %v", out.String(), err)
+	}
+
+	// Text given as arguments is unchanged.
+	if err := add("", "\ufeffarg"); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := run([]string{"show", "3"}, nil, &out); err != nil || !strings.Contains(out.String(), "\ufeffarg") {
+		t.Fatalf("arg BOM: %q %v", out.String(), err)
+	}
+}
+
 func TestCLIFlow(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("JOT_DB", filepath.Join(dir, "jot.db"))
