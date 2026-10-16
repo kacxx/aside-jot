@@ -134,15 +134,17 @@ Add to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
 On a jot, the hook prints
 
 ```json
-{"decision":"block","reason":"✓ Jotted #N","suppressOriginalPrompt":true,"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
+{"decision":"block","reason":"✓ Jotted #N","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
 ```
 
 Claude Code erases the prompt from context and shows you the reason, without
-repeating your jot as "Original prompt: >> …". Current versions read
-`suppressOriginalPrompt` from `hookSpecificOutput`; the top-level copy is for
-older ones. Every
-other prompt produces no output at all. Output from `UserPromptSubmit` would be
-added to Claude's context, so the hook stays silent.
+repeating your jot as "Original prompt: >> …" (Claude Code versions before
+`suppressOriginalPrompt` was added still show that line). Suppression changes
+only that message: the model never sees the jot, but Claude Code may still keep
+it on disk in the session transcript and your prompt history.
+
+Every other prompt produces no output at all. Output from `UserPromptSubmit`
+would be added to Claude's context, so the hook stays silent.
 
 Cursor also imports this hook, but aside does not work with Cursor: see
 [docs/cursor.md](cursor.md).

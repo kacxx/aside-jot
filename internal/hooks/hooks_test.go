@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -132,7 +133,7 @@ func runCursor(t *testing.T, payload []byte, open app.Opener) (string, CursorOut
 
 func assertBlockedOK(t *testing.T, b *ClaudeBlock, id int64) {
 	t.Helper()
-	if b == nil || b.Decision != "block" || !b.SuppressOriginalPrompt {
+	if b == nil || b.Decision != "block" {
 		t.Fatalf("expected block, got %+v", b)
 	}
 	if h := b.HookSpecificOutput; h.HookEventName != "UserPromptSubmit" || !h.SuppressOriginalPrompt {
@@ -199,6 +200,48 @@ func TestClaudeCaptureInRepo(t *testing.T) {
 	// A second jot gets the next id.
 	_, b = runClaude(t, fixture(t, "claude", "capture", map[string]any{"cwd": repo}), open)
 	assertBlockedOK(t, b, 2)
+}
+
+// TestClaudeBlockJSON checks the exact keys Claude Code reads, which a decode
+// into ClaudeBlock can't: json.Unmarshal matches keys case-insensitively.
+func TestClaudeBlockJSON(t *testing.T) {
+	const prompt = ">> token cache TTL looks too long, check with infra before shipping"
+	ok, _ := tempDB(t)
+	for name, c := range map[string]struct {
+		open  app.Opener
+		check func(t *testing.T, reason string)
+	}{
+		"saved": {ok, func(t *testing.T, reason string) {
+			if reason != "✓ Jotted #1" {
+				t.Fatalf("reason = %q", reason)
+			}
+		}},
+		"not saved": {
+			func() (*app.Service, error) { return nil, errors.New("disk on fire") },
+			func(t *testing.T, reason string) { assertBlockedFailed(t, reason, prompt) },
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, _ := runClaude(t, fixture(t, "claude", "capture", map[string]any{"cwd": t.TempDir()}), c.open)
+			var got map[string]any
+			if err := json.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatal(err)
+			}
+			reason, _ := got["reason"].(string)
+			c.check(t, reason)
+			want := map[string]any{
+				"decision": "block",
+				"reason":   reason,
+				"hookSpecificOutput": map[string]any{
+					"hookEventName":          "UserPromptSubmit",
+					"suppressOriginalPrompt": true,
+				},
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("output = %s\nwant keys and values %v", out, want)
+			}
+		})
+	}
 }
 
 func TestClaudeCaptureDesktopEnv(t *testing.T) {

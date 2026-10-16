@@ -28,10 +28,9 @@ var (
 type ClaudeBlock struct {
 	Decision string `json:"decision"`
 	Reason   string `json:"reason"`
-	// SuppressOriginalPrompt at the top level is where older Claude Code
-	// versions read it; current versions read only HookSpecificOutput's.
-	SuppressOriginalPrompt bool                    `json:"suppressOriginalPrompt"`
-	HookSpecificOutput     ClaudeBlockHookSpecific `json:"hookSpecificOutput"`
+	// HookSpecificOutput carries suppressOriginalPrompt: Claude Code ignores
+	// it at the top level.
+	HookSpecificOutput ClaudeBlockHookSpecific `json:"hookSpecificOutput"`
 }
 
 // ClaudeBlockHookSpecific is the hookSpecificOutput of a ClaudeBlock.
@@ -53,9 +52,8 @@ func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 		alt:   &cursorHook,
 		block: func(reason string) any {
 			return ClaudeBlock{
-				Decision:               "block",
-				Reason:                 reason,
-				SuppressOriginalPrompt: true,
+				Decision: "block",
+				Reason:   reason,
 				HookSpecificOutput: ClaudeBlockHookSpecific{
 					HookEventName:          "UserPromptSubmit",
 					SuppressOriginalPrompt: true,
