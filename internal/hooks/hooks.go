@@ -181,8 +181,12 @@ func notSaved(err error, original string) string {
 // BlockExit means the caller should write Reason to stderr and exit 2. Claude
 // Code skips a block whose JSON fails its schema and sends the prompt to the
 // model; with exit 2 it blocks anyway and shows stderr. When the JSON is
-// valid, Claude Code uses it and ignores stderr.
-type BlockExit struct{ Reason string }
+// valid, Claude Code uses it and ignores stderr. WriteErr is set if writing the
+// JSON failed.
+type BlockExit struct {
+	Reason   string
+	WriteErr error
+}
 
 func (e *BlockExit) Error() string { return "blocked: " + e.Reason }
 
