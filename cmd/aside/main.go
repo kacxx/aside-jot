@@ -80,8 +80,9 @@ Environment:
 
 func main() {
 	// If a reader closes its end, a write to stdout must fail with EPIPE rather
-	// than kill the process with SIGPIPE: hooks always exit 0, and aside mcp and
-	// the CLI shut down through their normal error paths.
+	// than kill the process with SIGPIPE: hooks exit 0 (or 2 for a Claude Code
+	// block), and aside mcp and the CLI shut down through their normal error
+	// paths.
 	signal.Ignore(syscall.SIGPIPE)
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "hook" {
@@ -116,7 +117,13 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (code int
 		fmt.Fprintf(stderr, "aside hook: unknown agent %q (want claude, codex or cursor)\n", args[0])
 		return 0
 	}
-	if err := h(context.Background(), stdin, stdout, app.OpenDefault); err != nil {
+	err := h(context.Background(), stdin, stdout, app.OpenDefault)
+	var block *hooks.BlockExit
+	if errors.As(err, &block) {
+		fmt.Fprint(stderr, block.Reason)
+		return 2
+	}
+	if err != nil {
 		fmt.Fprintln(stderr, "aside hook:", err)
 	}
 	return 0

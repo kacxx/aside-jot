@@ -29,6 +29,10 @@ type promptHook struct {
 	block func(reason string) any // the agent's blocking reply
 	alt   *promptHook             // handles payloads naming its event instead, if set
 
+	// exitBlock makes a block also return *BlockExit, so the host still
+	// blocks if it rejects the reply's JSON.
+	exitBlock bool
+
 	// parse decodes a payload that fits in memory into its event and prompt,
 	// plus a build func that constructs the request to save (Text is filled in
 	// by run). build is called only once the prompt is a confirmed jot, so its
@@ -61,7 +65,7 @@ func (h promptHook) handle(ctx context.Context, p payload, w io.Writer, open app
 			return h.passThrough(w)
 		}
 		if _, ok := capture.Match(p.prompt); ok {
-			return writeJSON(w, h.block(tooLarge(p.prompt)))
+			return h.blockWith(w, tooLarge(p.prompt))
 		}
 		return h.passThrough(w)
 	}
@@ -83,7 +87,15 @@ func (h promptHook) handle(ctx context.Context, p payload, w io.Writer, open app
 	// confirmed jot; an ordinary prompt pays no request or metadata allocation.
 	req := build()
 	req.Text = text
-	return writeJSON(w, h.block(save(ctx, open, req, prompt)))
+	return h.blockWith(w, save(ctx, open, req, prompt))
+}
+
+func (h promptHook) blockWith(w io.Writer, reason string) error {
+	err := writeJSON(w, h.block(reason))
+	if h.exitBlock {
+		return &BlockExit{Reason: reason}
+	}
+	return err
 }
 
 func (h promptHook) passThrough(w io.Writer) error {

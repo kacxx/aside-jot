@@ -127,10 +127,16 @@ hr "5b. hooks fail safe: an unwritable database still blocks the jot"
 BROKEN_DB="$TMP/not-a-dir/e2e.db"
 : >"$TMP/not-a-dir"   # a file where the data directory should be
 for agent in claude codex cursor; do
-  OUT="$(printf '{"prompt":">> keep me safe","cwd":"%s"}' "$TMP" | JOT_DB="$BROKEN_DB" "$BIN" hook "$agent" 2>/dev/null)"; CODE=$?
+  OUT="$(printf '{"prompt":">> keep me safe","cwd":"%s"}' "$TMP" | JOT_DB="$BROKEN_DB" "$BIN" hook "$agent" 2>"$TMP/hook.err")"; CODE=$?
+  ERR="$(cat "$TMP/hook.err")"
   echo "  $agent broken : ${OUT:-<empty>} (exit $CODE)"
-  if [ "$CODE" -eq 0 ] && echo "$OUT" | grep -q "NOT saved" && echo "$OUT" | grep -q ">> keep me safe"; then
-    ok "hook $agent blocks and reports NOT saved with the original text, exit 0"
+  # Claude Code's block also exits 2 with the reason on stderr.
+  case "$agent" in
+    claude) WANT_CODE=2; WANT_ERR="$(echo "$ERR" | grep -c ">> keep me safe")" ;;
+    *)      WANT_CODE=0; WANT_ERR=1 ;;
+  esac
+  if [ "$CODE" -eq "$WANT_CODE" ] && [ "$WANT_ERR" -ge 1 ] && echo "$OUT" | grep -q "NOT saved" && echo "$OUT" | grep -q ">> keep me safe"; then
+    ok "hook $agent blocks and reports NOT saved with the original text, exit $WANT_CODE"
   else
     bad "hook $agent did not fail safe on an unwritable database"
   fi
