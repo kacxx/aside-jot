@@ -135,6 +135,9 @@ func assertBlockedOK(t *testing.T, b *ClaudeBlock, id int64) {
 	if b == nil || b.Decision != "block" || !b.SuppressOriginalPrompt {
 		t.Fatalf("expected block, got %+v", b)
 	}
+	if h := b.HookSpecificOutput; h.HookEventName != "UserPromptSubmit" || !h.SuppressOriginalPrompt {
+		t.Fatalf("hookSpecificOutput = %+v, want UserPromptSubmit with suppressOriginalPrompt", h)
+	}
 	if want := "✓ Jotted #" + itoa(id); b.Reason != want {
 		t.Fatalf("reason = %q, want %q", b.Reason, want)
 	}

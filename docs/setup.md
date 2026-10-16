@@ -132,8 +132,15 @@ Add to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
 ```
 
 On a jot, the hook prints
-`{"decision":"block","reason":"✓ Jotted #N","suppressOriginalPrompt":true}`:
-Claude Code erases the prompt from context and shows you the reason. Every
+
+```json
+{"decision":"block","reason":"✓ Jotted #N","suppressOriginalPrompt":true,"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
+```
+
+Claude Code erases the prompt from context and shows you the reason, without
+repeating your jot as "Original prompt: >> …". Current versions read
+`suppressOriginalPrompt` from `hookSpecificOutput`; the top-level copy is for
+older ones. Every
 other prompt produces no output at all. Output from `UserPromptSubmit` would be
 added to Claude's context, so the hook stays silent.
 
@@ -142,8 +149,6 @@ Cursor also imports this hook, but aside does not work with Cursor: see
 
 Known Claude Code behaviour, outside aside's control (seen with v2.1.283):
 
-- `suppressOriginalPrompt` is ignored, so the block message repeats your jot
-  as "Original prompt: >> …". Only you see it; the model does not.
 - In web and mobile sessions, Claude Code may send the first prompt to a small
   model to generate the session title while the hook is still running, so the
   title can be derived from a jot. The conversation model never receives it.

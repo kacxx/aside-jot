@@ -26,8 +26,17 @@ var (
 
 // ClaudeBlock is the UserPromptSubmit output that blocks and erases a prompt.
 type ClaudeBlock struct {
-	Decision               string `json:"decision"`
-	Reason                 string `json:"reason"`
+	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
+	// SuppressOriginalPrompt at the top level is where older Claude Code
+	// versions read it; current versions read only HookSpecificOutput's.
+	SuppressOriginalPrompt bool                    `json:"suppressOriginalPrompt"`
+	HookSpecificOutput     ClaudeBlockHookSpecific `json:"hookSpecificOutput"`
+}
+
+// ClaudeBlockHookSpecific is the hookSpecificOutput of a ClaudeBlock.
+type ClaudeBlockHookSpecific struct {
+	HookEventName          string `json:"hookEventName"`
 	SuppressOriginalPrompt bool   `json:"suppressOriginalPrompt"`
 }
 
@@ -43,7 +52,15 @@ func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 		event: "UserPromptSubmit",
 		alt:   &cursorHook,
 		block: func(reason string) any {
-			return ClaudeBlock{Decision: "block", Reason: reason, SuppressOriginalPrompt: true}
+			return ClaudeBlock{
+				Decision:               "block",
+				Reason:                 reason,
+				SuppressOriginalPrompt: true,
+				HookSpecificOutput: ClaudeBlockHookSpecific{
+					HookEventName:          "UserPromptSubmit",
+					SuppressOriginalPrompt: true,
+				},
+			}
 		},
 		parse: parsePrompt("claude", claudeMeta),
 	}.run(ctx, r, w, open)
