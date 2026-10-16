@@ -1,0 +1,70 @@
+# Shadow risk review: a trial, not a gate (kacxx/notebook#3).
+# Claude rates each new PR's risk and says whether it would approve it without
+# the owner. It only comments: it never approves, requests changes or merges,
+# and the owner decides as usual. Compare its verdicts with the owner's
+# would-skip-review / needed-review labels at the end of the trial.
+
+name: Shadow risk review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rate:
+    # Skip drafts, bots (release PRs) and forks (they don't get the secret).
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Rate this pull request's risk, and say whether it is safe to merge
+            without the owner looking at it. Read the diff (`gh pr diff`), the
+            description (`gh pr view`) and any code you need for context.
+
+            Risk tiers:
+            - Low: documentation for people, tests, formatting, small isolated
+              changes with an obvious effect.
+            - Medium: ordinary feature or logic changes.
+            - High: changes to shared code many parts depend on, dependencies,
+              build or runtime config, or anything whose effect is hard to see
+              from the diff.
+            - Critical: CI and release workflows, anything that writes to a
+              user's config or deletes their data, secrets, and public
+              interfaces other tools rely on (commands, flags, MCP tools).
+              Never approve Critical.
+
+            Files that agents read as instructions are code, not docs:
+            SKILL.md, AGENTS.md, CLAUDE.md, prompts, and MCP tool descriptions.
+            A change to them changes behaviour; rate it like a code change.
+
+            Post exactly one PR comment with `gh pr comment`, in this format:
+
+            SHADOW-VERDICT: risk=<Low|Medium|High|Critical> approve=<yes|no>
+
+            **Shadow risk review** (trial, kacxx/notebook#3; not a review)
+            - **Risk:** <tier>, because <one line>
+            - **Would approve without the owner:** <yes|no>, because <one line>
+            - **Instruction files changed:** <yes|no>
+
+            Do not approve, request changes, push, or review the code in depth.
+          claude_args: |
+            --max-turns 15
+            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Read,Glob,Grep"
