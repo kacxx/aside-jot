@@ -36,7 +36,7 @@ A jot is blocked and saved. Point `cwd` at a real repo to get git context:
 
 ```sh
 jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/claude/capture.json | bin/aside hook claude
-# {"decision":"block","reason":"✓ Jotted #1","suppressOriginalPrompt":true}
+# {"decision":"block","reason":"✓ Jotted #1","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
 ```
 
 ## Cursor hook
@@ -72,7 +72,7 @@ jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/codex/capture.json | bin/aside ho
 
 ```sh
 JOT_DB=/dev/null/nope.db bin/aside hook claude < testdata/hooks/claude/capture.json; echo "exit=$?"
-# {"decision":"block","reason":"✗ Jot NOT saved (...). Your text:\n\n>> token cache ...","suppressOriginalPrompt":true}
+# {"decision":"block","reason":"✗ Jot NOT saved (...). Your text:\n\n>> token cache ...","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
 # exit=0
 ```
 
