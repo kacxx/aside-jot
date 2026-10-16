@@ -12,12 +12,14 @@ front:
 ✓ Jotted #12
 ```
 
-aside saves it with its git context (repo, branch, commit) and **blocks the
-prompt**, so the model never sees it. The agent's context stays clean, and you
-keep working.
+aside saves it with its git context (repo, branch, commit). In **Claude Code**
+and **Codex** it also blocks the prompt, so the model never sees it and the
+work in front of you keeps going. That is the don't-disrupt-my-flow feature.
 
-Works with **Claude Code** and **Codex**. Not Cursor: it sends a blocked prompt
-to the model with your next message ([why](docs/cursor.md)).
+In **Cursor** the same line stays in the chat, so the model still sees it. The
+hook can still save the jot, and the skill can still route the request.
+Don't-disrupt-my-flow is a Claude Code and Codex feature
+([why](docs/cursor.md)).
 
 ![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "aside done" clears it](docs/demo.gif)
 
@@ -127,7 +129,8 @@ behaviour: [docs/setup.md](docs/setup.md).
 
 | You type | What happens |
 | --- | --- |
-| `>> some thought` (in the agent) | Saved with the repo, branch, commit and chat; the model never sees it |
+| `>> some thought` (in Claude Code or Codex) | Saved with the repo, branch, commit and chat; the model never sees it |
+| `>> some thought` (in Cursor) | Saved, and the skill can route it; the line stays in the chat |
 | `>> session: SUP-4821 token TTL` | Also labels the chat, so `aside find` and `aside sessions` show why it exists |
 | `aside add some thought` (in a terminal) | Saved with the git context of the current directory |
 
@@ -289,8 +292,8 @@ aside, so the skill matches the binary.
   MCP for Codex's config file, and known Claude Code and Codex behaviour.
 - [docs/reference.md](docs/reference.md): the capture rule, what happens when
   saving fails, how `find` matches, `promote` in full, and storage.
-- [docs/cursor.md](docs/cursor.md): why Cursor isn't supported and what was
-  tested.
+- [docs/cursor.md](docs/cursor.md): why a Cursor jot stays in the chat, and
+  what was tested.
 - [docs/decisions.md](docs/decisions.md): why aside works the way it does, and
   what's left out on purpose.
 - [AGENTS.md](AGENTS.md): building, testing and contributing.
