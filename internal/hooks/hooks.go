@@ -10,7 +10,8 @@
 //     NOT saved and repeats the original text so nothing is lost.
 //   - A payload too large to parse in memory is still checked: its top-level
 //     prompt is found by streaming, and a jot is blocked as NOT saved.
-//   - Handlers never make the process exit non-zero; callers exit 0.
+//   - Handlers return nil or a write error, and callers exit 0, except that
+//     Claude Code's handler returns *BlockExit when it blocks a jot.
 package hooks
 
 import (
@@ -176,6 +177,14 @@ func save(ctx context.Context, open app.Opener, req app.CaptureRequest, original
 func notSaved(err error, original string) string {
 	return fmt.Sprintf("✗ Jot NOT saved (%v). Your text:\n\n%s", err, original)
 }
+
+// BlockExit means the caller should write Reason to stderr and exit 2. Claude
+// Code skips a block whose JSON fails its schema and sends the prompt to the
+// model; with exit 2 it blocks anyway and shows stderr. When the JSON is
+// valid, Claude Code uses it and ignores stderr.
+type BlockExit struct{ Reason string }
+
+func (e *BlockExit) Error() string { return "blocked: " + e.Reason }
 
 func writeJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)

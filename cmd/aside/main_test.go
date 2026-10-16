@@ -188,20 +188,38 @@ func TestAge(t *testing.T) {
 	}
 }
 
-func TestHookAlwaysExitsZero(t *testing.T) {
+// A Claude Code block exits 2 with the reason on stderr, so it still blocks if
+// Claude Code rejects the JSON. Everything else exits 0.
+func TestHookExitCodes(t *testing.T) {
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "file", "jot.db"))
 	// A regular file where the data directory should be makes the DB unopenable.
 	if err := os.WriteFile(filepath.Dir(os.Getenv("JOT_DB")), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, args := range [][]string{{}, {"nope"}, {"claude"}, {"codex"}, {"cursor"}} {
+	for _, c := range []struct {
+		args   []string
+		prompt string
+		code   int
+	}{
+		{[]string{}, `{"prompt":">> x"}`, 0},
+		{[]string{"nope"}, `{"prompt":">> x"}`, 0},
+		{[]string{"claude"}, `{"prompt":">> x"}`, 2},
+		{[]string{"claude"}, `{"prompt":">> x","hook_event_name":"beforeSubmitPrompt"}`, 0},
+		{[]string{"claude"}, `{"prompt":"hello"}`, 0},
+		{[]string{"codex"}, `{"prompt":">> x"}`, 0},
+		{[]string{"cursor"}, `{"prompt":">> x"}`, 0},
+	} {
 		var out, errb bytes.Buffer
-		if code := runHook(args, strings.NewReader(`{"prompt":">> x"}`), &out, &errb); code != 0 {
-			t.Errorf("hook %v exited %d", args, code)
+		if code := runHook(c.args, strings.NewReader(c.prompt), &out, &errb); code != c.code {
+			t.Errorf("hook %v %s exited %d, want %d", c.args, c.prompt, code, c.code)
 		}
-		if len(args) == 1 && args[0] != "nope" && !strings.Contains(out.String(), "NOT saved") {
-			t.Errorf("hook %v: %q", args, out.String())
+		jot := strings.Contains(c.prompt, ">>")
+		if len(c.args) == 1 && c.args[0] != "nope" && jot && !strings.Contains(out.String(), "NOT saved") {
+			t.Errorf("hook %v %s: stdout %q", c.args, c.prompt, out.String())
+		}
+		if c.code == 2 && (!strings.HasPrefix(errb.String(), "✗ Jot NOT saved") || !strings.Contains(errb.String(), ">> x")) {
+			t.Errorf("hook %v %s: stderr %q, want the reason", c.args, c.prompt, errb.String())
 		}
 	}
 }

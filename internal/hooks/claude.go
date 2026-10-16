@@ -40,7 +40,8 @@ type ClaudeBlockHookSpecific struct {
 }
 
 // Claude handles a Claude Code UserPromptSubmit hook. Pass-through writes
-// nothing (any stdout would be added to the model's context).
+// nothing (any stdout would be added to the model's context). A block returns
+// *BlockExit.
 //
 // Cursor imports Claude Code hooks and runs them on beforeSubmitPrompt. A
 // silent reply there makes Cursor submit the prompt even when `aside hook
@@ -60,7 +61,8 @@ func Claude(ctx context.Context, r io.Reader, w io.Writer, open app.Opener) erro
 				},
 			}
 		},
-		parse: parsePrompt("claude", claudeMeta),
+		parse:     parsePrompt("claude", claudeMeta),
+		exitBlock: true,
 	}.run(ctx, r, w, open)
 }
 

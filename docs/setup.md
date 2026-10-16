@@ -137,6 +137,10 @@ On a jot, the hook prints
 {"decision":"block","reason":"✓ Jotted #N","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
 ```
 
+and exits 2 with the reason on stderr too. Claude Code uses the JSON when it's
+valid; if it ever rejects it, exit 2 still blocks the jot and shows the stderr
+message, instead of sending the jot to the model.
+
 Claude Code erases the prompt from context and shows you the reason, without
 repeating your jot as "Original prompt: >> …" (Claude Code versions before
 `suppressOriginalPrompt` was added still show that line). Suppression changes
