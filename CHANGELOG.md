@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/kacxx/aside-jot/compare/v0.5.0...v0.5.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* hide the jot from Claude Code's block message again ([#129](https://github.com/kacxx/aside-jot/issues/129)) ([d32ba84](https://github.com/kacxx/aside-jot/commit/d32ba8407ebedf6cfc635582e1c2406c938488e5))
+* keep jots blocked if Claude Code rejects the hook's JSON ([#132](https://github.com/kacxx/aside-jot/issues/132)) ([5b73b18](https://github.com/kacxx/aside-jot/commit/5b73b1831e529684e3c1cf89e3be300784138792))
+
 ## [0.5.0](https://github.com/kacxx/aside-jot/compare/v0.4.0...v0.5.0) (2026-10-15)
 
 
