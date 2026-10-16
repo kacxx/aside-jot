@@ -107,6 +107,40 @@ the downloaded binary in to your `PATH`.
 Windows paths, project-level configs, Codex trust details and known agent
 behaviour: [docs/setup.md](docs/setup.md).
 
+### What aside keeps
+
+The hook sees every prompt you send, but keeps only prompts that start with
+`>> ` and some text. Anything else passes through untouched and isn't stored.
+
+For each jot, aside saves the text, the time, the agent and session it came
+from, the folder, the git repo, branch and commit, and the session's transcript
+path when the agent gives one. It all goes into one SQLite file on your machine
+(`aside paths` shows where), readable only by you on macOS and Linux.
+
+Some commands also read, on your machine, the transcript of the session a jot
+came from: `activity` (and "update jot N") to see what the session did next,
+`sessions` and `find` for the folder a chat started in, and `promote
+--with-reply` for the agent's reply. `open` and `find` read Claude Desktop's
+session list to link jots back to their chats.
+
+aside makes no network connections. The one thing that sends anything anywhere
+is `aside promote`, which posts to GitHub through your `gh` login, after asking.
+
+### Uninstall
+
+1. Remove the aside entry from the `UserPromptSubmit` hooks in
+   `~/.claude/settings.json` (or `~/.codex/hooks.json`). `aside setup` backed
+   the file up first (`<file>.bak-<time>`), but that copy is missing any
+   changes you've made since.
+2. Remove the MCP server, if you added it: `claude mcp remove --scope user aside`
+   or `codex mcp remove aside`.
+3. Remove the skill: `claude plugin uninstall aside@aside-jot` (and
+   `claude plugin marketplace remove aside-jot`), or delete a copied
+   `skills/aside` folder.
+4. Delete the binary (`aside paths` shows where it is).
+5. To delete your jots too, delete the database folder `aside paths` shows,
+   after an `aside backup` if you might want them back.
+
 ## A day with aside
 
 - **Morning.** Deep in a refactor, you jot three things without stopping:
