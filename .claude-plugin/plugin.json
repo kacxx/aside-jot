@@ -6,5 +6,6 @@
     "name": "kacxx",
     "url": "https://github.com/kacxx"
   },
-  "repository": "https://github.com/kacxx/aside-jot"
+  "repository": "https://github.com/kacxx/aside-jot",
+  "license": "MIT"
 }
