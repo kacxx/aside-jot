@@ -35,9 +35,13 @@ done
 A jot is blocked and saved. Point `cwd` at a real repo to get git context:
 
 ```sh
-jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/claude/capture.json | bin/aside hook claude
+jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/claude/capture.json | bin/aside hook claude 2>/dev/null; echo "exit=$?"
 # {"decision":"block","reason":"✓ Jotted #1","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
+# exit=2
 ```
+
+A block exits 2 and repeats the reason on stderr, so Claude Code still blocks
+the jot if it ever rejects the JSON.
 
 ## Cursor hook
 
@@ -71,9 +75,9 @@ jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/codex/capture.json | bin/aside ho
 ## Failure is safe
 
 ```sh
-JOT_DB=/dev/null/nope.db bin/aside hook claude < testdata/hooks/claude/capture.json; echo "exit=$?"
+JOT_DB=/dev/null/nope.db bin/aside hook claude < testdata/hooks/claude/capture.json 2>/dev/null; echo "exit=$?"
 # {"decision":"block","reason":"✗ Jot NOT saved (...). Your text:\n\n>> token cache ...","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}
-# exit=0
+# exit=2
 ```
 
 ## Read back

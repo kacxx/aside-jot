@@ -30,7 +30,10 @@ space or a backslash.
 - A payload too large to parse in memory (over 16 MiB) is still checked: its
   prompt is found by streaming, and a jot in it is blocked and reported as
   NOT saved.
-- The hook process always exits 0.
+- The hook process exits 0, except that `aside hook claude` exits 2 when it
+  blocks a jot, with the message on stderr as well as in the JSON. Claude Code
+  uses the JSON when it's valid; if it ever rejects the JSON, exit 2 still
+  blocks the jot instead of sending it to the model.
 
 ## Finding a session
 

@@ -105,15 +105,23 @@ func git(t *testing.T, dir string, args ...string) string {
 func runClaude(t *testing.T, payload []byte, open app.Opener) (string, *ClaudeBlock) {
 	t.Helper()
 	var out bytes.Buffer
-	if err := Claude(context.Background(), bytes.NewReader(payload), &out, open); err != nil {
+	err := Claude(context.Background(), bytes.NewReader(payload), &out, open)
+	var exit *BlockExit
+	if err != nil && !errors.As(err, &exit) {
 		t.Fatal(err)
 	}
 	if out.Len() == 0 {
+		if exit != nil {
+			t.Fatalf("BlockExit %q with no JSON", exit.Reason)
+		}
 		return "", nil
 	}
 	var b ClaudeBlock
 	if err := json.Unmarshal(out.Bytes(), &b); err != nil {
 		t.Fatalf("invalid JSON %q: %v", out.String(), err)
+	}
+	if exit == nil || exit.Reason != b.Reason {
+		t.Fatalf("a block must return BlockExit with its reason %q; got %v", b.Reason, err)
 	}
 	return out.String(), &b
 }
