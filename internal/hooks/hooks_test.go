@@ -340,6 +340,34 @@ func TestClaudeDBOpenFailure(t *testing.T) {
 	}
 }
 
+// A panic after the prompt is recognised as a jot still blocks it as NOT saved.
+func TestPanicAfterMatchBlocks(t *testing.T) {
+	for _, exitBlock := range []bool{true, false} {
+		h := promptHook{
+			event:     "UserPromptSubmit",
+			block:     func(reason string) any { return ClaudeBlock{Decision: "block", Reason: reason} },
+			exitBlock: exitBlock,
+			parse: func([]byte) (string, string, func() app.CaptureRequest, error) {
+				return "UserPromptSubmit", ">> keep me", func() app.CaptureRequest { panic("boom") }, nil
+			},
+		}
+		var out bytes.Buffer
+		err := h.run(context.Background(), strings.NewReader(`{}`), &out, neverOpen(t))
+		var exit *BlockExit
+		if exitBlock != errors.As(err, &exit) {
+			t.Fatalf("exitBlock=%v: err = %v", exitBlock, err)
+		}
+		var b ClaudeBlock
+		if err := json.Unmarshal(out.Bytes(), &b); err != nil {
+			t.Fatalf("invalid JSON %q: %v", out.String(), err)
+		}
+		if b.Decision != "block" || !strings.Contains(b.Reason, "internal error: boom") {
+			t.Fatalf("exitBlock=%v: %+v", exitBlock, b)
+		}
+		assertBlockedFailed(t, b.Reason, ">> keep me")
+	}
+}
+
 // lockDB holds an exclusive lock on the database from another connection.
 func lockDB(t *testing.T, path string) {
 	t.Helper()
