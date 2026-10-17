@@ -18,10 +18,15 @@ const codexJot = ">> retry budget in the payments client looks unbounded, check 
 func runCodex(t *testing.T, payload []byte, open app.Opener) (string, *CodexBlock) {
 	t.Helper()
 	var out bytes.Buffer
-	if err := Codex(context.Background(), bytes.NewReader(payload), &out, open); err != nil {
+	err := Codex(context.Background(), bytes.NewReader(payload), &out, open)
+	var exit *BlockExit
+	if err != nil && !errors.As(err, &exit) {
 		t.Fatal(err)
 	}
 	if out.Len() == 0 {
+		if exit != nil {
+			t.Fatalf("BlockExit %q with no JSON", exit.Reason)
+		}
 		return "", nil
 	}
 	s := out.String()
@@ -30,6 +35,9 @@ func runCodex(t *testing.T, payload []byte, open app.Opener) (string, *CodexBloc
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&b); err != nil {
 		t.Fatalf("invalid Codex output %q: %v", s, err)
+	}
+	if exit == nil || exit.Reason != b.Reason {
+		t.Fatalf("a block must return BlockExit with its reason %q; got %v", b.Reason, err)
 	}
 	return s, &b
 }

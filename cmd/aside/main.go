@@ -81,8 +81,8 @@ Environment:
 func main() {
 	// If a reader closes its end, a write to stdout must fail with EPIPE rather
 	// than kill the process with SIGPIPE: hooks exit 0 (or 2 for a Claude Code
-	// block), and aside mcp and the CLI shut down through their normal error
-	// paths.
+	// or Codex block), and aside mcp and the CLI shut down through their normal
+	// error paths.
 	signal.Ignore(syscall.SIGPIPE)
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "hook" {
@@ -94,8 +94,8 @@ func main() {
 	}
 }
 
-// runHook returns 0, or 2 for a Claude Code block: a hook must never break the
-// host editor.
+// runHook returns 0, or 2 for a Claude Code or Codex block: a hook must never
+// break the host editor.
 func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
 	defer func() {
 		if r := recover(); r != nil {

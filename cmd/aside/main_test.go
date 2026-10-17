@@ -189,8 +189,8 @@ func TestAge(t *testing.T) {
 	}
 }
 
-// A Claude Code block exits 2 with the reason on stderr, so it still blocks if
-// Claude Code rejects the JSON. Everything else exits 0.
+// A Claude Code or Codex block exits 2 with the reason on stderr, so it still
+// blocks if the host rejects the JSON. Everything else exits 0.
 func TestHookExitCodes(t *testing.T) {
 	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "file", "jot.db"))
 	// A regular file where the data directory should be makes the DB unopenable.
@@ -210,7 +210,8 @@ func TestHookExitCodes(t *testing.T) {
 		{[]string{"claude"}, tooLarge, 2},
 		{[]string{"claude"}, `{"prompt":">> x","hook_event_name":"beforeSubmitPrompt"}`, 0},
 		{[]string{"claude"}, `{"prompt":"hello"}`, 0},
-		{[]string{"codex"}, `{"prompt":">> x"}`, 0},
+		{[]string{"codex"}, `{"prompt":">> x"}`, 2},
+		{[]string{"codex"}, `{"prompt":"hello"}`, 0},
 		{[]string{"cursor"}, `{"prompt":">> x"}`, 0},
 	} {
 		var out, errb bytes.Buffer
