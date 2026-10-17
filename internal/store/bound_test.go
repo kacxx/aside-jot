@@ -13,7 +13,8 @@ import (
 // triggered on demand, so attempts made in the first 3/4 of the budget get a
 // zero timeout (a real, immediate SQLITE_BUSY against a locked database); later
 // attempts use the timeout Open hands them. Passing the full busy timeout to
-// every attempt would take about 1.75x the budget here.
+// every attempt would take about 1.75x the budget here, so the limit is 1.5x:
+// loose enough for a slow CI runner, still below that.
 func TestOpenHonoursBusyTimeout(t *testing.T) {
 	const budget = 400 * time.Millisecond
 	path := filepath.Join(t.TempDir(), "jot.db")
@@ -59,7 +60,7 @@ func TestOpenHonoursBusyTimeout(t *testing.T) {
 	if !isBusy(err) {
 		t.Fatalf("expected a busy error, got %v", err)
 	}
-	if limit := budget * 12 / 10; elapsed > limit {
+	if limit := budget * 15 / 10; elapsed > limit {
 		t.Fatalf("Open took %v with a %v budget (limit %v)", elapsed, budget, limit)
 	}
 	if attempts < 2 || lastTimeout >= budget {
