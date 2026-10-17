@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/kacxx/aside-jot/internal/app"
@@ -83,17 +84,31 @@ func (h promptHook) handle(ctx context.Context, p payload, w io.Writer, open app
 	if !ok {
 		return h.passThrough(w)
 	}
-	// Build the request (and its metadata) only now that the prompt is a
-	// confirmed jot; an ordinary prompt pays no request or metadata allocation.
-	req := build()
-	req.Text = text
-	return h.blockWith(w, save(ctx, open, req, prompt))
+	return h.blockJot(w, prompt, func() string {
+		// Build the request (and its metadata) only now that the prompt is a
+		// confirmed jot; an ordinary prompt pays no request or metadata
+		// allocation.
+		req := build()
+		req.Text = text
+		return save(ctx, open, req, prompt)
+	})
+}
+
+// blockJot blocks a recognised jot with the message from reason. A panic in
+// reason still blocks it, as NOT saved.
+func (h promptHook) blockJot(w io.Writer, prompt string, reason func() string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = h.blockWith(w, notSaved(fmt.Errorf("internal error: %v", r), prompt))
+		}
+	}()
+	return h.blockWith(w, reason())
 }
 
 func (h promptHook) blockWith(w io.Writer, reason string) error {
 	err := writeJSON(w, h.block(reason))
 	if h.exitBlock {
-		return &BlockExit{Reason: reason}
+		return &BlockExit{Reason: reason, WriteErr: err}
 	}
 	return err
 }
