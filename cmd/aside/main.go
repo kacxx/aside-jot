@@ -122,6 +122,9 @@ func runHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (code int
 	var block *hooks.BlockExit
 	if errors.As(err, &block) {
 		fmt.Fprint(stderr, block.Reason)
+		if block.WriteErr != nil {
+			fmt.Fprintf(stderr, "\n\naside hook: %v", block.WriteErr)
+		}
 		return 2
 	}
 	if err != nil {

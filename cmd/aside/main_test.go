@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -196,6 +197,7 @@ func TestHookExitCodes(t *testing.T) {
 	if err := os.WriteFile(filepath.Dir(os.Getenv("JOT_DB")), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	tooLarge := `{"pad":"` + strings.Repeat("x", 17<<20) + `","prompt":">> x"}`
 
 	for _, c := range []struct {
 		args   []string
@@ -205,6 +207,7 @@ func TestHookExitCodes(t *testing.T) {
 		{[]string{}, `{"prompt":">> x"}`, 0},
 		{[]string{"nope"}, `{"prompt":">> x"}`, 0},
 		{[]string{"claude"}, `{"prompt":">> x"}`, 2},
+		{[]string{"claude"}, tooLarge, 2},
 		{[]string{"claude"}, `{"prompt":">> x","hook_event_name":"beforeSubmitPrompt"}`, 0},
 		{[]string{"claude"}, `{"prompt":"hello"}`, 0},
 		{[]string{"codex"}, `{"prompt":">> x"}`, 2},
@@ -212,16 +215,37 @@ func TestHookExitCodes(t *testing.T) {
 		{[]string{"cursor"}, `{"prompt":">> x"}`, 0},
 	} {
 		var out, errb bytes.Buffer
+		name := c.prompt
+		if len(name) > 60 {
+			name = name[:60] + "…"
+		}
 		if code := runHook(c.args, strings.NewReader(c.prompt), &out, &errb); code != c.code {
-			t.Errorf("hook %v %s exited %d, want %d", c.args, c.prompt, code, c.code)
+			t.Errorf("hook %v %s exited %d, want %d", c.args, name, code, c.code)
 		}
 		jot := strings.Contains(c.prompt, ">>")
 		if len(c.args) == 1 && c.args[0] != "nope" && jot && !strings.Contains(out.String(), "NOT saved") {
-			t.Errorf("hook %v %s: stdout %q", c.args, c.prompt, out.String())
+			t.Errorf("hook %v %s: stdout %q", c.args, name, out.String())
 		}
 		if c.code == 2 && (!strings.HasPrefix(errb.String(), "✗ Jot NOT saved") || !strings.Contains(errb.String(), ">> x")) {
-			t.Errorf("hook %v %s: stderr %q, want the reason", c.args, c.prompt, errb.String())
+			t.Errorf("hook %v %s: stderr %q, want the reason", c.args, name, errb.String())
 		}
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("stdout closed") }
+
+// A Claude Code block that can't write its JSON still exits 2, and says why
+// after the reason.
+func TestHookBlockWriteError(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	var errb bytes.Buffer
+	if code := runHook([]string{"claude"}, strings.NewReader(`{"prompt":">> x"}`), failWriter{}, &errb); code != 2 {
+		t.Fatalf("exited %d, want 2", code)
+	}
+	if got := errb.String(); !strings.HasPrefix(got, "✓ Jotted #1") || !strings.HasSuffix(got, "aside hook: stdout closed") {
+		t.Fatalf("stderr %q", got)
 	}
 }
 

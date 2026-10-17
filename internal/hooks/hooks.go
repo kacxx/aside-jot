@@ -184,7 +184,11 @@ func notSaved(err error, original string) string {
 // model; with exit 2 it blocks anyway and shows stderr. When the JSON is
 // valid, Claude Code uses it and ignores stderr. Codex fails open on JSON it
 // rejects in the same way; with exit 2 it shows stderr in place of the reason.
-type BlockExit struct{ Reason string }
+// WriteErr is set if writing the JSON failed.
+type BlockExit struct {
+	Reason   string
+	WriteErr error
+}
 
 func (e *BlockExit) Error() string { return "blocked: " + e.Reason }
 
