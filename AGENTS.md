@@ -71,11 +71,11 @@ records the results for the initial version.
   Cursor's hook prints `{"continue":true}`.
 - **A failed save still blocks.** If the database is unwritable, a `>>` prompt
   is blocked with "NOT saved" and the original text.
-- **The Claude Code hook exits 2 on a block.** Claude Code skips a block whose
-  JSON fails its schema and sends the prompt to the model; exit 2 blocks
-  anyway, showing stderr, so the block message goes on stderr too. When the
-  JSON is valid Claude Code uses it and ignores stderr. Codex and Cursor hooks
-  exit 0.
+- **The Claude Code and Codex hooks exit 2 on a block.** Both skip a block
+  whose JSON they reject and send the prompt to the model (Codex rejects even
+  an unknown field); exit 2 blocks anyway, showing stderr, so the block
+  message goes on stderr too. Claude Code uses valid JSON and ignores stderr;
+  Codex shows stderr whenever the hook exits 2. The Cursor hook exits 0.
 - **Cursor runs Claude Code hooks too.** It imports user hooks from
   `~/.claude/settings.json` and runs them on `beforeSubmitPrompt` next to its
   own, then merges the replies and joins their messages. So one Cursor prompt

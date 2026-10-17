@@ -15,8 +15,8 @@ points end to end:
    Pass-through must be exact: nothing at all for Claude Code and Codex (they
    add hook output to the model's context), `{"continue":true}` for Cursor.
    With an unwritable database, a `>>` prompt is still blocked and reported
-   "NOT saved" with the original text. The Codex and Cursor hooks exit 0; the
-   Claude Code hook exits 2 and repeats the message on stderr.
+   "NOT saved" with the original text. The Claude Code and Codex hooks exit 2
+   and repeat the message on stderr; the Cursor hook exits 0.
 6. MCP — a JSON-RPC `initialize` handshake.
 
 The database is redirected to a throwaway path (`JOT_DB` under `mktemp -d`), so

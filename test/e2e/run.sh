@@ -130,9 +130,9 @@ for agent in claude codex cursor; do
   OUT="$(printf '{"prompt":">> keep me safe","cwd":"%s"}' "$TMP" | JOT_DB="$BROKEN_DB" "$BIN" hook "$agent" 2>"$TMP/hook.err")"; CODE=$?
   ERR="$(cat "$TMP/hook.err")"
   echo "  $agent broken : ${OUT:-<empty>} (exit $CODE)"
-  # Claude Code's block also exits 2 with the reason on stderr.
+  # Claude Code and Codex blocks also exit 2 with the reason on stderr.
   case "$agent" in
-    claude) WANT_CODE=2; WANT_ERR="$(echo "$ERR" | grep -c ">> keep me safe")" ;;
+    claude|codex) WANT_CODE=2; WANT_ERR="$(echo "$ERR" | grep -c ">> keep me safe")" ;;
     *)      WANT_CODE=0; WANT_ERR=1 ;;
   esac
   if [ "$CODE" -eq "$WANT_CODE" ] && [ "$WANT_ERR" -ge 1 ] && echo "$OUT" | grep -q "NOT saved" && echo "$OUT" | grep -q ">> keep me safe"; then

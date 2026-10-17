@@ -11,7 +11,8 @@
 //   - A payload too large to parse in memory is still checked: its top-level
 //     prompt is found by streaming, and a jot is blocked as NOT saved.
 //   - Handlers return nil or a write error, and callers exit 0, except that
-//     Claude Code's handler returns *BlockExit when it blocks a jot.
+//     the Claude Code and Codex handlers return *BlockExit when they block a
+//     jot.
 package hooks
 
 import (
@@ -181,8 +182,9 @@ func notSaved(err error, original string) string {
 // BlockExit means the caller should write Reason to stderr and exit 2. Claude
 // Code skips a block whose JSON fails its schema and sends the prompt to the
 // model; with exit 2 it blocks anyway and shows stderr. When the JSON is
-// valid, Claude Code uses it and ignores stderr. WriteErr is set if writing the
-// JSON failed.
+// valid, Claude Code uses it and ignores stderr. Codex fails open on JSON it
+// rejects in the same way; with exit 2 it shows stderr in place of the reason.
+// WriteErr is set if writing the JSON failed.
 type BlockExit struct {
 	Reason   string
 	WriteErr error

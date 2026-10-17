@@ -68,9 +68,13 @@ done
 # normal: [] exit=0
 # mid_prompt: [] exit=0
 # malformed: [] exit=0
-jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/codex/capture.json | bin/aside hook codex
+jq --arg cwd "$PWD" '.cwd=$cwd' testdata/hooks/codex/capture.json | bin/aside hook codex 2>/dev/null; echo "exit=$?"
 # {"decision":"block","reason":"✓ Jotted #4"}
+# exit=2
 ```
+
+Like the Claude Code hook, a block exits 2 with the reason on stderr; Codex
+shows the stderr copy.
 
 ## Failure is safe
 

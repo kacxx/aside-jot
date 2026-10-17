@@ -194,8 +194,10 @@ ordinary message), so use the CLI to review hooks.
 > `~/.codex/config.toml`. After any change, type `>> test` and check you get
 > `✓ Jotted #N` rather than a model reply.
 
-On a jot, the hook prints `{"decision":"block","reason":"✓ Jotted #N"}` and
-Codex shows you the reason. Every other prompt produces no output at all: Codex
+On a jot, the hook prints `{"decision":"block","reason":"✓ Jotted #N"}`,
+writes the same reason to stderr and exits 2, and Codex shows you the reason.
+Codex treats JSON it rejects (even an unknown field) as a failed hook and
+sends the prompt on; exit 2 blocks it regardless. Every other prompt produces no output at all: Codex
 adds a hook's plain stdout to the model's context. Captures are stored with
 `source: codex`, the Codex session id, and the turn id and model in metadata.
 
