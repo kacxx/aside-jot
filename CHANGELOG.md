@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/kacxx/aside-jot/compare/v0.5.1...v0.5.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* block a jot as NOT saved if the hook panics after recognising it ([#133](https://github.com/kacxx/aside-jot/issues/133)) ([32e9dd1](https://github.com/kacxx/aside-jot/commit/32e9dd1da8c6057a7ef2825299026f1b768e0edb))
+* keep jots blocked if Codex rejects the hook's JSON ([#134](https://github.com/kacxx/aside-jot/issues/134)) ([079dc59](https://github.com/kacxx/aside-jot/commit/079dc59c185bd5ab834c67be024ee522ef100022))
+
 ## [0.5.1](https://github.com/kacxx/aside-jot/compare/v0.5.0...v0.5.1) (2026-10-16)
 
 
