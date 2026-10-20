@@ -739,7 +739,7 @@ func TestInboxShowsSessionTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 2 || !strings.HasSuffix(lines[1], " · ESM-6993 review") {
+	if len(lines) != 2 || !strings.HasSuffix(lines[1], "  ESM-6993 review") {
 		t.Fatalf("inbox: %q", out.String())
 	}
 	if strings.Contains(lines[0], "·") {
@@ -747,10 +747,17 @@ func TestInboxShowsSessionTitle(t *testing.T) {
 	}
 }
 
-func TestPrintInboxTitleWithoutLocation(t *testing.T) {
+func TestPrintInboxTitlePlacement(t *testing.T) {
 	var out bytes.Buffer
-	printInbox(&out, []app.Entry{{ID: 1, Text: "note", CreatedAt: time.Now(), SessionTitle: "ESM-6993 review"}})
-	if got := out.String(); strings.Contains(got, "·") || !strings.HasSuffix(got, "note  ESM-6993 review\n") {
-		t.Fatalf("inbox: %q", got)
+	printInbox(&out, []app.Entry{
+		{ID: 1, Text: "note", CreatedAt: time.Now(), SessionTitle: "ESM-6993 review"},
+		{ID: 2, Text: "note", CreatedAt: time.Now(), RepoName: "code", Branch: "main", SessionTitle: "ESM-6993 review"},
+	})
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if !strings.HasSuffix(lines[0], "note  ESM-6993 review") || strings.Contains(lines[0], "·") {
+		t.Errorf("no location: %q", lines[0])
+	}
+	if !strings.HasSuffix(lines[1], "note  [code@main] · ESM-6993 review") {
+		t.Errorf("with location: %q", lines[1])
 	}
 }
