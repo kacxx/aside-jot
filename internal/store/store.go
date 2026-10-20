@@ -94,6 +94,9 @@ type Entry struct {
 	// OpenURL links to the jot's source chat. It is never stored; the app
 	// layer fills it in for the entries it returns on request.
 	OpenURL string `json:"open_url,omitempty"`
+	// SessionTitle is the Claude Code session's name, read from its transcript
+	// when the inbox is listed. It is never stored.
+	SessionTitle string `json:"session_title,omitempty"`
 	// OpenCommand is the shell command that opens OpenURL (aside open <id>),
 	// with the full path to aside. Like OpenURL it is never stored; the MCP
 	// server fills it in.
