@@ -13,8 +13,9 @@ import (
 	"time"
 )
 
-// Timeout bounds the total time spent running git.
-const Timeout = 750 * time.Millisecond
+// Timeout bounds the total time spent running git. A variable so tests that
+// check the git fields can raise it on slow CI runners.
+var Timeout = 750 * time.Millisecond
 
 // Info is the git context of a directory. Empty fields mean "unknown".
 type Info struct {

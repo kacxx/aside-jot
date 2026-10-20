@@ -15,8 +15,16 @@ import (
 	"time"
 
 	"github.com/kacxx/aside-jot/internal/app"
+	"github.com/kacxx/aside-jot/internal/gitctx"
 	"github.com/kacxx/aside-jot/internal/store"
 )
+
+// TestMain raises the git time budget: these tests check the git fields of a
+// capture, and four git runs can overrun 750 ms on a shared Windows runner.
+func TestMain(m *testing.M) {
+	gitctx.Timeout = 30 * time.Second
+	os.Exit(m.Run())
+}
 
 // fixture loads testdata/hooks/<tool>/<name>.json, optionally rewriting
 // top-level fields (e.g. cwd) so captures point at real temp dirs.
