@@ -185,10 +185,13 @@ aside done 3 4 5 --note "pushed to Q4, see https://example.com/wiki/plan"   # se
 
 ```
 $ aside inbox
-#14   today  SUP-4821 needs a backend ticket  [api@main]
+#14   today  SUP-4821 needs a backend ticket  [api@main] · SUP-4821 review
 #12   2d     token cache TTL looks too long, check with infra before shipping  [api@main]
 #11   2d     session: SUP-4821 token TTL investigation  [api@main]
 ```
+
+For jots from Claude Code, the session's name follows the location (` · SUP-4821
+review` above), read from its transcript when you list the inbox.
 
 ### Get back to a chat
 

@@ -713,3 +713,36 @@ func TestActivityCLI(t *testing.T) {
 		t.Fatalf("activity of a missing jot: %v", err)
 	}
 }
+
+func TestInboxShowsSessionTitle(t *testing.T) {
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	ctx := context.Background()
+	tp := filepath.Join(t.TempDir(), "t.jsonl")
+	if err := os.WriteFile(tp, []byte(`{"type":"custom-title","customTitle":"ESM-6993 review"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, req := range []app.CaptureRequest{
+		{Text: "titled", Source: "claude", SessionID: "s1", Metadata: map[string]any{"transcript_path": tp}},
+		{Text: "from terminal", Source: "cli"},
+	} {
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc.Close()
+	var out bytes.Buffer
+	if err := run([]string{"inbox"}, strings.NewReader(""), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 || !strings.HasSuffix(lines[1], " · ESM-6993 review") && !strings.HasSuffix(lines[1], " · ESM-6993 review") {
+		t.Fatalf("inbox: %q", out.String())
+	}
+	if strings.Contains(lines[0], "·") {
+		t.Fatalf("jot without a title: %q", lines[0])
+	}
+}
