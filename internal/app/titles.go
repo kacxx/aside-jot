@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -90,10 +91,16 @@ func transcriptTitle(path string) string {
 	return cleanTitle(ai)
 }
 
-// cleanTitle makes a transcript's title safe to print: control characters,
-// including the ESC that starts terminal escape sequences, become spaces, and
-// runs of whitespace collapse.
+// terminalEscapes matches the escape sequences a terminal acts on: CSI (ESC [
+// or the 8-bit form, parameters, a final byte), OSC (ESC ] up to BEL or ST) and
+// other two-byte ESC sequences.
+var terminalEscapes = regexp.MustCompile(`(?:\x1b\[|\x{9b})[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]`)
+
+// cleanTitle makes a transcript's title safe to print: terminal escape
+// sequences are removed whole, any other control character becomes a space,
+// and runs of whitespace collapse.
 func cleanTitle(s string) string {
+	s = terminalEscapes.ReplaceAllString(s, "")
 	return strings.Join(strings.Fields(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '

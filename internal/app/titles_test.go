@@ -102,15 +102,24 @@ func TestSessionTitleRecordAtWindowStart(t *testing.T) {
 	}
 }
 
-func TestSessionTitleControlCharactersRemoved(t *testing.T) {
-	line := `{"type":"custom-title","customTitle":"a\u001b]0;pwned\u0007b\nc\u009bd"}` + "\n"
-	if got := titleOf(t, "claude", line); got != "a ]0;pwned b c d" {
-		t.Errorf("title = %q", got)
+func TestCleanTitleRemovesTerminalEscapes(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"Bad \x1b[31mred\x1b[0m tab\tnewline\nbell\a", "Bad red tab newline bell"},
+		{"a\x1b]0;pwned\x07b", "ab"},
+		{"a\x1b]8;;http://x\x1b\\link\x1b]8;;\x1b\\b", "alinkb"},
+		{"a\u009b31mb", "ab"},
+		{"x\x1bMy", "xy"},
+		{"  plain   title ", "plain title"},
+		{"ESM-6993 review", "ESM-6993 review"},
+	} {
+		if got := cleanTitle(tc.in); got != tc.want {
+			t.Errorf("cleanTitle(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
 
 func TestSessionTitleUnusableCustomFallsBackToAI(t *testing.T) {
-	blank := `{"type":"custom-title","customTitle":"\u001b \t"}` + "\n"
+	blank := `{"type":"custom-title","customTitle":"\u001b[0m \t"}` + "\n"
 	if got := titleOf(t, "claude", blank+aiTitleOne); got != "Generated name" {
 		t.Errorf("title = %q", got)
 	}

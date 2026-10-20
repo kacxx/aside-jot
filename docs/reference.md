@@ -119,7 +119,8 @@ a released version.
 
 `aside inbox` prints `#<id> <age> <text, cut to 80>  [repo@branch]`, newest
 first. For a Claude Code jot whose transcript has a session title, ` · <title>`
-follows the location; MCP `inbox` returns the same as `session_title`, left out
+follows the location (or follows the text after two spaces, when the jot has no
+location); MCP `inbox` returns the same as `session_title`, left out
 when there is none.
 
 - The title is read from the end of the transcript (`transcript_path` in the

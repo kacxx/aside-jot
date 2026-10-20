@@ -739,7 +739,7 @@ func TestInboxShowsSessionTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 2 || !strings.HasSuffix(lines[1], "  ESM-6993 review") {
+	if len(lines) != 2 || !strings.HasSuffix(lines[1], "  · ESM-6993 review") {
 		t.Fatalf("inbox: %q", out.String())
 	}
 	if strings.Contains(lines[0], "·") {
@@ -754,7 +754,7 @@ func TestPrintInboxTitlePlacement(t *testing.T) {
 		{ID: 2, Text: "note", CreatedAt: time.Now(), RepoName: "code", Branch: "main", SessionTitle: "ESM-6993 review"},
 	})
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if !strings.HasSuffix(lines[0], "note  ESM-6993 review") || strings.Contains(lines[0], "·") {
+	if !strings.HasSuffix(lines[0], "note  · ESM-6993 review") {
 		t.Errorf("no location: %q", lines[0])
 	}
 	if !strings.HasSuffix(lines[1], "note  [code@main] · ESM-6993 review") {

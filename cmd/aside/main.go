@@ -621,7 +621,7 @@ func printInbox(w io.Writer, es []app.Entry) {
 		if e.SessionTitle != "" {
 			title := strings.Join(strings.Fields(e.SessionTitle), " ")
 			if where == "" {
-				where = "  " + title
+				where = "  · " + title
 			} else {
 				where += " · " + title
 			}
