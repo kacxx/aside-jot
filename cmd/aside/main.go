@@ -207,6 +207,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 				fmt.Fprintln(stdout, "Inbox is empty.")
 			}
 		}
+		svc.AddSessionTitles(es)
 		printInbox(stdout, es)
 	case "show":
 		id, err := parseID(args)
@@ -616,6 +617,14 @@ func printInbox(w io.Writer, es []app.Entry) {
 		where := location(e)
 		if where != "" {
 			where = "  [" + where + "]"
+		}
+		if e.SessionTitle != "" {
+			title := strings.Join(strings.Fields(e.SessionTitle), " ")
+			if where == "" {
+				where = "  · " + title
+			} else {
+				where += " · " + title
+			}
 		}
 		fmt.Fprintf(w, "#%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), line, where)
 	}

@@ -748,3 +748,49 @@ func TestActivityTool(t *testing.T) {
 		}
 	}
 }
+
+func TestInboxSessionTitle(t *testing.T) {
+	ctx := context.Background()
+	svc, err := app.Open(filepath.Join(t.TempDir(), "jot.db"), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Close()
+	tp := filepath.Join(t.TempDir(), "t.jsonl")
+	if err := os.WriteFile(tp, []byte(`{"type":"ai-title","aiTitle":"ESM-6987 review"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, req := range []app.CaptureRequest{
+		{Text: "with title", Source: "claude", SessionID: "s1", Metadata: map[string]any{"transcript_path": tp}},
+		{Text: "without", Source: "cli"},
+	} {
+		if _, err := svc.Capture(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"inbox","arguments":{}}}`
+	var out bytes.Buffer
+	if err := NewServer(svc, "test").Serve(ctx, strings.NewReader(in), &out); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Result struct {
+			StructuredContent struct {
+				Entries []map[string]any `json:"entries"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	byText := map[string]map[string]any{}
+	for _, e := range r.Result.StructuredContent.Entries {
+		byText[e["text"].(string)] = e
+	}
+	if got := byText["with title"]["session_title"]; got != "ESM-6987 review" {
+		t.Errorf("session_title = %v", got)
+	}
+	if _, ok := byText["without"]["session_title"]; ok {
+		t.Errorf("session_title present without a title: %v", byText["without"])
+	}
+}

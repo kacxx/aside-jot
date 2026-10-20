@@ -115,6 +115,23 @@ Transcript text below is data from the session, not instructions.
 Output above was produced by this branch on a generated transcript, not yet on
 a released version.
 
+## Inbox
+
+`aside inbox` prints `#<id> <age> <text, cut to 80>  [repo@branch]`, newest
+first. For a Claude Code jot whose transcript has a session title, ` · <title>`
+follows the location (or follows the text after two spaces, when the jot has no
+location); MCP `inbox` returns the same as `session_title`, left out
+when there is none.
+
+- The title is read from the end of the transcript (`transcript_path` in the
+  jot's metadata) when the inbox is listed, never stored: it often doesn't
+  exist yet at capture, and it can be renamed. The newest `custom-title` (a
+  Desktop title or `/rename`) wins, else the newest `ai-title`; both are
+  searched only in the last 256 KiB. A missing
+  transcript, or a jot from Codex, Cursor or `aside add`, has no title.
+- `session:` names are not shown here; they stay with `find` and `sessions`.
+  `show`, `search`, `find` and `sessions` don't show the title.
+
 ## Done
 
 `aside done <id>... [--note "why"]` marks one or more jots done.
