@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
+	"unicode"
 )
 
 // titleTailBytes is how much of the end of a transcript is searched for the
@@ -83,7 +85,19 @@ func transcriptTitle(path string) string {
 		}
 	}
 	if custom != "" {
-		return custom
+		return cleanTitle(custom)
 	}
-	return ai
+	return cleanTitle(ai)
+}
+
+// cleanTitle makes a transcript's title safe to print: control characters,
+// including the ESC that starts terminal escape sequences, become spaces, and
+// runs of whitespace collapse.
+func cleanTitle(s string) string {
+	return strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)), " ")
 }

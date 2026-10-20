@@ -101,3 +101,10 @@ func TestSessionTitleRecordAtWindowStart(t *testing.T) {
 		t.Errorf("title = %q", got)
 	}
 }
+
+func TestSessionTitleControlCharactersRemoved(t *testing.T) {
+	line := `{"type":"custom-title","customTitle":"a\u001b]0;pwned\u0007b\nc\u009bd"}` + "\n"
+	if got := titleOf(t, "claude", line); got != "a ]0;pwned b c d" {
+		t.Errorf("title = %q", got)
+	}
+}
