@@ -84,8 +84,8 @@ func transcriptTitle(path string) string {
 			ai = rec.AITitle
 		}
 	}
-	if custom != "" {
-		return cleanTitle(custom)
+	if title := cleanTitle(custom); title != "" {
+		return title
 	}
 	return cleanTitle(ai)
 }

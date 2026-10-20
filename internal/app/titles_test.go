@@ -108,3 +108,10 @@ func TestSessionTitleControlCharactersRemoved(t *testing.T) {
 		t.Errorf("title = %q", got)
 	}
 }
+
+func TestSessionTitleUnusableCustomFallsBackToAI(t *testing.T) {
+	blank := `{"type":"custom-title","customTitle":"\u001b \t"}` + "\n"
+	if got := titleOf(t, "claude", blank+aiTitleOne); got != "Generated name" {
+		t.Errorf("title = %q", got)
+	}
+}
