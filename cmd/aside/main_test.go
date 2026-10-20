@@ -739,7 +739,7 @@ func TestInboxShowsSessionTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 2 || !strings.HasSuffix(lines[1], " · ESM-6993 review") && !strings.HasSuffix(lines[1], " · ESM-6993 review") {
+	if len(lines) != 2 || !strings.HasSuffix(lines[1], " · ESM-6993 review") {
 		t.Fatalf("inbox: %q", out.String())
 	}
 	if strings.Contains(lines[0], "·") {
