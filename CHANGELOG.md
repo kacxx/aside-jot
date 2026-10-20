@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/kacxx/aside-jot/compare/v0.5.2...v0.6.0) (2026-10-20)
+
+
+### Features
+
+* show the Claude Code session title in the inbox ([#142](https://github.com/kacxx/aside-jot/issues/142)) ([1ee1793](https://github.com/kacxx/aside-jot/commit/1ee17934cbe1a4d613bdbf6aa1936def52958f08)), closes [#141](https://github.com/kacxx/aside-jot/issues/141)
+
 ## [0.5.2](https://github.com/kacxx/aside-jot/compare/v0.5.1...v0.5.2) (2026-10-17)
 
 
