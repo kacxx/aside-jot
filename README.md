@@ -190,8 +190,8 @@ $ aside inbox
 #11   2d     session: SUP-4821 token TTL investigation  [api@main]
 ```
 
-For jots from Claude Code, the session's name follows the location (` · SUP-4821
-review` above), read from its transcript when you list the inbox.
+When available, a Claude Code session's name follows the location (` · SUP-4821
+review` above); aside reads it from the transcript when listing the inbox.
 
 ### Get back to a chat
 

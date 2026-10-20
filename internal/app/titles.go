@@ -49,7 +49,8 @@ func transcriptTitle(path string) string {
 	if err != nil {
 		return ""
 	}
-	start := info.Size() - titleTailBytes
+	// Read one byte before the window, to tell whether it starts on a record.
+	start := info.Size() - titleTailBytes - 1
 	if start < 0 {
 		start = 0
 	}
@@ -59,7 +60,7 @@ func transcriptTitle(path string) string {
 	}
 	lines := bytes.Split(buf, []byte("\n"))
 	if start > 0 {
-		lines = lines[1:] // the first line is cut off
+		lines = lines[1:] // the first line may be cut off; the byte before the window is its newline if not
 	}
 	var custom, ai string
 	for _, line := range lines {

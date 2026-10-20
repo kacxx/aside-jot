@@ -88,3 +88,16 @@ func TestSessionTitleReadsOnlyTheTail(t *testing.T) {
 		t.Errorf("title = %q", got)
 	}
 }
+
+func TestSessionTitleRecordAtWindowStart(t *testing.T) {
+	// The window begins exactly on a record boundary: that record is kept.
+	const pre, post = `{"type":"user","message":{"content":"`, `"}}` + "\n"
+	pad := titleTailBytes - len(customOne) - len(pre) - len(post)
+	tail := customOne + pre + strings.Repeat("x", pad) + post
+	if len(tail) != titleTailBytes {
+		t.Fatalf("test setup: tail is %d bytes", len(tail))
+	}
+	if got := titleOf(t, "claude", titleUserLine+tail); got != "ESM-6993 review" {
+		t.Errorf("title = %q", got)
+	}
+}
