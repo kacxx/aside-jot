@@ -746,3 +746,11 @@ func TestInboxShowsSessionTitle(t *testing.T) {
 		t.Fatalf("jot without a title: %q", lines[0])
 	}
 }
+
+func TestPrintInboxTitleWithoutLocation(t *testing.T) {
+	var out bytes.Buffer
+	printInbox(&out, []app.Entry{{ID: 1, Text: "note", CreatedAt: time.Now(), SessionTitle: "ESM-6993 review"}})
+	if got := out.String(); strings.Contains(got, "·") || !strings.HasSuffix(got, "note  ESM-6993 review\n") {
+		t.Fatalf("inbox: %q", got)
+	}
+}

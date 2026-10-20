@@ -619,7 +619,12 @@ func printInbox(w io.Writer, es []app.Entry) {
 			where = "  [" + where + "]"
 		}
 		if e.SessionTitle != "" {
-			where += " · " + strings.Join(strings.Fields(e.SessionTitle), " ")
+			title := strings.Join(strings.Fields(e.SessionTitle), " ")
+			if where == "" {
+				where = "  " + title
+			} else {
+				where += " · " + title
+			}
 		}
 		fmt.Fprintf(w, "#%-4d %-6s %s%s\n", e.ID, age(e.CreatedAt, now()), line, where)
 	}
