@@ -172,8 +172,8 @@ Only a prompt that **starts** with `>>`, a space and then text is a jot (extra
 spaces are fine). `>>x`, ` >> x` and `a >> b` go to the model as normal. To
 send a prompt that starts with `>> `, put a space or a backslash in front.
 
-If a jot shows up as a chat message instead of `✓ Jotted`, resend it once the
-agent is idle.
+In Claude Code or Codex, if a jot shows up as a chat message instead of
+`✓ Jotted`, resend it once the agent is idle.
 
 ### Review
 

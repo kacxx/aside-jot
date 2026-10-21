@@ -26,9 +26,11 @@ the jot is saved. Everything else passes through untouched:
 Need to send a prompt that starts with `>> ` to the model? Prefix it with a
 space or a backslash.
 
-If a jot shows up as a chat message instead of `✓ Jotted`, resend it once the
-agent is idle. A prompt sent while the agent is busy can be queued and merged
-with other prompts, and only a jot at the start of a prompt is matched.
+In Claude Code or Codex, if a jot shows up as a chat message instead of
+`✓ Jotted`, resend it once the agent is idle. A prompt sent while the agent is
+busy can be queued and merged with other prompts, and only a jot at the start
+of a prompt is matched. Don't resend in Cursor: it keeps the jot in the chat
+and sends it with your next message anyway (see [cursor.md](cursor.md)).
 
 ## Failure behaviour
 
