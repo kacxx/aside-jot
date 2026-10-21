@@ -45,8 +45,9 @@ func isGap(r rune) bool {
 // and the line breaks after them. A block that is never closed leaves nothing.
 func StripSystemReminders(text string) string {
 	const open, end = "<system-reminder>", "</system-reminder>"
+	lead := " \t\r\n" // only before the first block; later gaps are line breaks
 	for {
-		t := strings.TrimLeft(text, " \t\r\n")
+		t := strings.TrimLeft(text, lead)
 		if !strings.HasPrefix(t, open) {
 			return text
 		}
@@ -55,5 +56,6 @@ func StripSystemReminders(text string) string {
 			return ""
 		}
 		text = strings.TrimLeft(rest, "\r\n")
+		lead = "\r\n"
 	}
 }
