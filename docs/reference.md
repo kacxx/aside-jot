@@ -15,6 +15,8 @@ the jot is saved. Everything else passes through untouched:
 | `>> some thought` | yes  |
 | `>>  some thought` | yes (extra spaces) |
 | `<system-reminder>…</system-reminder>` then `>> x` | yes |
+| `<system-reminder>…</system-reminder>` then ` >> x` (leading space) | no |
+| `<system-reminder>` never closed, then `>> x` | no |
 | `>>x`           | no   |
 | ` >> x`         | no (leading space) |
 | `\>> x`         | no (escaped) |

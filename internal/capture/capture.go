@@ -42,7 +42,7 @@ func isGap(r rune) bool {
 }
 
 // StripSystemReminders removes the <system-reminder> blocks that start text,
-// and the whitespace after them. A block that is never closed leaves nothing.
+// and the line breaks after them. A block that is never closed leaves nothing.
 func StripSystemReminders(text string) string {
 	const open, end = "<system-reminder>", "</system-reminder>"
 	for {
@@ -54,6 +54,6 @@ func StripSystemReminders(text string) string {
 		if !ok {
 			return ""
 		}
-		text = strings.TrimLeft(rest, " \t\r\n")
+		text = strings.TrimLeft(rest, "\r\n")
 	}
 }

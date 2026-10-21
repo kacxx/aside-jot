@@ -32,6 +32,8 @@ func TestMatch(t *testing.T) {
 		{">>  ", "", false},
 		{">> \u00a0\n", "", false},
 		{"<system-reminder>a</system-reminder>\nhello", "", false},
+		{"<system-reminder>a</system-reminder> >> x", "", false},
+		{"<system-reminder>a</system-reminder>\n >> x", "", false},
 		{"<system-reminder>unterminated\n>> x", "", false},
 		{"<system-reminder>a</system-reminder>\nfix it\n>> not first", "", false},
 		{">>\nx", "", false},
