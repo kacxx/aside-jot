@@ -29,7 +29,7 @@ environment variables kept the old name on purpose.
   `cursor.go`) decoding its payload and shaping its replies; `prompt.go` is
   the gating sequence they share.
 - `internal/capture/` — the `>>` rule, deliberately narrow: `>>`, spaces
-  or tabs, then a non-space character, after any leading `<system-reminder>` blocks.
+  or tabs (or non-breaking spaces), then a non-space character, after any leading `<system-reminder>` blocks.
 - `internal/app/` — the service layer: capture, inbox, done, `promote.go`
   (jot to GitHub issue via `gh`), `sessions.go` (`find` and `sessions`).
 - `internal/store/` — SQLite (pure Go, no cgo), one `entries` table, owner-only
