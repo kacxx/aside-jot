@@ -168,9 +168,12 @@ is `aside promote`, which posts to GitHub through your `gh` login, after asking.
 | `>> session: SUP-4821 token TTL` | Also labels the chat, so `aside find` and `aside sessions` show why it exists |
 | `aside add some thought` (in a terminal) | Saved with the git context of the current directory |
 
-Only a prompt that **starts** with `>> ` and then text is a jot. `>>x`,
-` >> x` and `a >> b` go to the model as normal. To send a prompt that starts
-with `>> `, put a space or a backslash in front.
+Only a prompt that **starts** with `>>`, a space and then text is a jot (extra
+spaces are fine). `>>x`, ` >> x` and `a >> b` go to the model as normal. To
+send a prompt that starts with `>> `, put a space or a backslash in front.
+
+If a jot shows up as a chat message instead of `✓ Jotted`, resend it once the
+agent is idle.
 
 ### Review
 
