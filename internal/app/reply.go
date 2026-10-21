@@ -125,7 +125,7 @@ var commands = []string{
 // <system-reminder> blocks in front of the prompt they arrived with, so they
 // are ignored and what follows them is classified.
 func userRecordKind(content json.RawMessage) userKind {
-	text := stripSystemReminders(contentText(content, "text"))
+	text := capture.StripSystemReminders(contentText(content, "text"))
 	if strings.TrimSpace(text) == "" {
 		if hasBlock(content, "image") {
 			return userPrompt
@@ -154,23 +154,6 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 		}
 	}
 	return false
-}
-
-// stripSystemReminders removes the <system-reminder> blocks that start text,
-// and the newlines after them, leaving the rest untrimmed.
-func stripSystemReminders(text string) string {
-	const open, end = "<system-reminder>", "</system-reminder>"
-	for {
-		t := strings.TrimLeft(text, " \t\n")
-		if !strings.HasPrefix(t, open) {
-			return text
-		}
-		_, rest, ok := strings.Cut(t, end)
-		if !ok {
-			return ""
-		}
-		text = strings.TrimLeft(rest, "\n")
-	}
 }
 
 // hasBlock reports whether a message's content has a block of the given type.

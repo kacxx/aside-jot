@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kacxx/aside-jot/internal/capture"
 )
 
 const (
@@ -198,7 +200,7 @@ func (c *activityCollector) add(line []byte, after time.Time) {
 		if userRecordKind(rec.Message.Content) != userPrompt {
 			return
 		}
-		text := strings.TrimSpace(stripSystemReminders(contentText(rec.Message.Content, "text")))
+		text := strings.TrimSpace(capture.StripSystemReminders(contentText(rec.Message.Content, "text")))
 		if text == "" {
 			text = "[image]"
 		}
