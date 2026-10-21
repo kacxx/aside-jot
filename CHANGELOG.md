@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/kacxx/aside-jot/compare/v0.6.0...v0.7.0) (2026-10-21)
+
+
+### Features
+
+* match jots with extra spaces and after system-reminder blocks ([#146](https://github.com/kacxx/aside-jot/issues/146)) ([c38d83e](https://github.com/kacxx/aside-jot/commit/c38d83eaecd7ff704aea35cd208f1020dffda6ec))
+
 ## [0.6.0](https://github.com/kacxx/aside-jot/compare/v0.5.2...v0.6.0) (2026-10-20)
 
 
