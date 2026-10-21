@@ -4,12 +4,17 @@ How aside behaves in detail. For everyday use, see the [README](../README.md).
 
 ## Capture rules
 
-A prompt is a jot only if it **starts** with `>>`, then exactly one space, then
-a non-space character (`^>> \S`). Everything else passes through untouched:
+A prompt is a jot only if it **starts** with `>>`, then one or more spaces or
+tabs (a non-breaking space counts), then a non-space character. Claude Desktop
+puts a `<system-reminder>` block in front of a prompt when a linked session
+reports back, so leading reminder blocks are skipped before the check and only
+the jot is saved. Everything else passes through untouched:
 
 | Prompt          | Jot? |
 | --------------- | ---- |
 | `>> some thought` | yes  |
+| `>>  some thought` | yes (extra spaces) |
+| `<system-reminder>…</system-reminder>` then `>> x` | yes |
 | `>>x`           | no   |
 | ` >> x`         | no (leading space) |
 | `\>> x`         | no (escaped) |
