@@ -17,12 +17,14 @@ import (
 
 // fakeRunner answers git and gh calls without running anything.
 type fakeRunner struct {
-	calls  []string // "name arg arg ..."
-	stdin  []string // what each call was fed
-	remote string   // git remote get-url output; empty fails
-	auth   error    // gh auth status result
-	create error    // gh issue create result
-	url    string   // gh issue create output
+	calls   []string // "name arg arg ..."
+	stdin   []string // what each call was fed
+	remote  string   // git remote get-url output; empty fails
+	auth    error    // gh auth status result
+	create  error    // gh issue create result
+	url     string   // gh issue create output
+	view    string   // gh repo view output; empty means a private repo
+	viewErr error    // gh repo view result
 }
 
 func (f *fakeRunner) Run(_ context.Context, stdin io.Reader, name string, args ...string) ([]byte, error) {
@@ -41,6 +43,14 @@ func (f *fakeRunner) Run(_ context.Context, stdin io.Reader, name string, args .
 		return []byte(f.remote + "\n"), nil
 	case name == "gh" && args[0] == "auth":
 		return nil, f.auth
+	case name == "gh" && args[0] == "repo":
+		if f.viewErr != nil {
+			return nil, f.viewErr
+		}
+		if f.view == "" {
+			return []byte(`{"visibility":"PRIVATE"}` + "\n"), nil
+		}
+		return []byte(f.view + "\n"), nil
 	case name == "gh" && args[0] == "issue":
 		if f.create != nil {
 			return nil, f.create
@@ -176,18 +186,22 @@ func TestPromoteDryRun(t *testing.T) {
 		!strings.HasPrefix(p.Body, "fix the cache TTL  \nsee https://example.com/x\n\nCaptured ") {
 		t.Fatalf("promotion: %+v", p)
 	}
+	// Of gh, a dry run only looks up the repo's visibility.
 	for _, c := range f.calls {
-		if strings.HasPrefix(c, "gh") {
+		if strings.HasPrefix(c, "gh") && c != "gh repo view kacxx/aside-jot --json visibility" {
 			t.Errorf("dry run ran %q", c)
 		}
 	}
+	if p.Visibility != "PRIVATE" || p.Warning != "" {
+		t.Errorf("visibility %q, warning %q", p.Visibility, p.Warning)
+	}
 
-	// With --repo, not even git runs.
+	// With --repo, git doesn't run.
 	f = &fakeRunner{}
 	if p, err := svc.Promote(ctx, f, PromoteRequest{ID: 1, Repo: "o/n", DryRun: true}); err != nil || p.Repo != "o/n" {
 		t.Fatalf("dry run --repo: %+v, %v", p, err)
 	}
-	if len(f.calls) != 0 {
+	if strings.Join(f.calls, "\n") != "gh repo view o/n --json visibility" {
 		t.Errorf("dry run --repo ran %v", f.calls)
 	}
 	if after, _ := svc.Show(ctx, 1); after.Status != before.Status || string(after.Metadata) != string(before.Metadata) {
@@ -211,13 +225,14 @@ func TestPromoteSuccessThenRefused(t *testing.T) {
 	want := []string{
 		"git -C /r remote get-url origin",
 		"gh auth status --hostname github.com",
+		"gh repo view kacxx/aside-jot --json visibility",
 		"gh issue create --repo=kacxx/aside-jot --title=fix the cache TTL --body-file=-",
 	}
 	if strings.Join(f.calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls:\n%s", strings.Join(f.calls, "\n"))
 	}
-	if f.stdin[2] != p.Body {
-		t.Errorf("issue body on stdin: %q", f.stdin[2])
+	if f.stdin[3] != p.Body {
+		t.Errorf("issue body on stdin: %q", f.stdin[3])
 	}
 
 	e, _ := svc.Show(ctx, 1)
@@ -242,7 +257,8 @@ func TestPromoteOtherHost(t *testing.T) {
 	if _, err := svc.Promote(context.Background(), f, PromoteRequest{ID: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if f.calls[1] != "gh auth status --hostname ghe.example.com" || !strings.Contains(f.calls[2], "--repo=ghe.example.com/team/proj") {
+	if f.calls[1] != "gh auth status --hostname ghe.example.com" || f.calls[2] != "gh repo view ghe.example.com/team/proj --json visibility" ||
+		!strings.Contains(f.calls[3], "--repo=ghe.example.com/team/proj") {
 		t.Fatalf("calls: %v", f.calls)
 	}
 }
@@ -289,6 +305,104 @@ func TestPromoteFailuresLeaveJotUnchanged(t *testing.T) {
 	svc := promoteService(t, repoInfo)
 	if _, err := svc.Promote(ctx, &fakeRunner{}, PromoteRequest{ID: 99}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown id: %v", err)
+	}
+}
+
+func TestPromotePublicRepo(t *testing.T) {
+	ctx := context.Background()
+	const publicWarning = "⚠ o/n is PUBLIC: this issue, including the jot and any reply, will be visible to anyone."
+	lookupFailed := errors.New("exit status 1: GraphQL: Could not resolve to a Repository with the name 'o/n'.")
+	const unknownWarning = "⚠ couldn't check whether o/n is public (exit status 1: GraphQL: Could not resolve to a Repository with the name 'o/n'.): treat this issue, including the jot and any reply, as visible to anyone."
+	confirmed := func(shown *Promotion) func(Promotion) error {
+		return func(p Promotion) error { *shown = p; return nil }
+	}
+	for _, c := range []struct {
+		name        string
+		f           *fakeRunner
+		public      bool // PromoteRequest.Public
+		confirm     bool // pass a Confirm that accepts
+		wantErr     string
+		wantVis     string
+		wantWarning string
+	}{
+		{name: "private", f: &fakeRunner{}, wantVis: "PRIVATE"},
+		{name: "internal", f: &fakeRunner{view: `{"visibility":"INTERNAL"}`}, wantVis: "INTERNAL"},
+		{name: "private, lower case", f: &fakeRunner{view: `{"visibility":"private"}`}, wantVis: "PRIVATE"},
+		{name: "public, unconfirmed", f: &fakeRunner{view: `{"visibility":"PUBLIC"}`},
+			wantErr: "o/n is PUBLIC, so the issue, including the jot and any reply, would be visible to anyone; pass --public with --yes"},
+		{name: "public, unconfirmed, Public", f: &fakeRunner{view: `{"visibility":"PUBLIC"}`}, public: true,
+			wantVis: "PUBLIC", wantWarning: publicWarning},
+		{name: "public, confirmed", f: &fakeRunner{view: `{"visibility":"PUBLIC"}`}, confirm: true,
+			wantVis: "PUBLIC", wantWarning: publicWarning},
+		{name: "lookup fails, unconfirmed", f: &fakeRunner{viewErr: lookupFailed},
+			wantErr: "couldn't check whether o/n is public (exit status 1: GraphQL: Could not resolve"},
+		{name: "lookup fails, unconfirmed, Public", f: &fakeRunner{viewErr: lookupFailed}, public: true, wantWarning: unknownWarning},
+		{name: "lookup fails, confirmed", f: &fakeRunner{viewErr: lookupFailed}, confirm: true, wantWarning: unknownWarning},
+		{name: "not JSON", f: &fakeRunner{view: "huh"},
+			wantErr: "couldn't check whether o/n is public (gh repo view printed no visibility); pass --public with --yes"},
+		{name: "unknown visibility", f: &fakeRunner{view: `{"visibility":"SECRET"}`},
+			wantErr: `couldn't check whether o/n is public (gh repo view printed visibility "SECRET")`},
+		{name: "no visibility", f: &fakeRunner{view: `{}`}, wantErr: `couldn't check whether o/n is public`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			svc := promoteService(t, repoInfo)
+			c.f.url = "https://github.com/o/n/issues/1"
+			req := PromoteRequest{ID: 1, Repo: "o/n", Public: c.public}
+			var shown Promotion
+			if c.confirm {
+				req.Confirm = confirmed(&shown)
+			}
+			p, err := svc.Promote(ctx, c.f, req)
+			created := strings.HasPrefix(c.f.calls[len(c.f.calls)-1], "gh issue create")
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("err = %v; want %q", err, c.wantErr)
+				}
+				if created {
+					t.Fatal("created an issue")
+				}
+				if e, _ := svc.Show(ctx, 1); e.Status != "inbox" || e.IssueURL != "" {
+					t.Errorf("jot changed: %+v", e)
+				}
+				return
+			}
+			if err != nil || !created || p.URL == "" {
+				t.Fatalf("promote: %+v, %v (calls %v)", p, err, c.f.calls)
+			}
+			if p.Visibility != c.wantVis || p.Warning != c.wantWarning {
+				t.Errorf("visibility %q, warning %q; want %q, %q", p.Visibility, p.Warning, c.wantVis, c.wantWarning)
+			}
+			if c.confirm && shown.Warning != c.wantWarning {
+				t.Errorf("Confirm was shown warning %q; want %q", shown.Warning, c.wantWarning)
+			}
+		})
+	}
+}
+
+func TestPromoteDryRunWarnsAboutPublicRepo(t *testing.T) {
+	ctx := context.Background()
+	notFound := &exec.Error{Name: "gh", Err: exec.ErrNotFound}
+	for _, c := range []struct {
+		f           *fakeRunner
+		wantWarning string
+	}{
+		{&fakeRunner{}, ""},
+		{&fakeRunner{view: `{"visibility":"PUBLIC"}`}, "⚠ o/n is PUBLIC: this issue, including the jot and any reply, will be visible to anyone."},
+		{&fakeRunner{viewErr: notFound}, "⚠ couldn't check whether o/n is public (gh (GitHub CLI) not found on PATH; install it"},
+		// gh's message is shown on one line, without escapes.
+		{&fakeRunner{viewErr: errors.New("exit status 1: bad\n\x1b[2Jthing")}, "⚠ couldn't check whether o/n is public (exit status 1: bad thing): treat"},
+	} {
+		svc := promoteService(t, repoInfo)
+		p, err := svc.Promote(ctx, c.f, PromoteRequest{ID: 1, Repo: "o/n", DryRun: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(p.Warning, c.wantWarning) || (c.wantWarning == "") != (p.Warning == "") {
+			t.Errorf("warning %q; want %q", p.Warning, c.wantWarning)
+		}
+		if strings.Join(c.f.calls, "\n") != "gh repo view o/n --json visibility" {
+			t.Errorf("dry run ran %v", c.f.calls)
+		}
 	}
 }
 

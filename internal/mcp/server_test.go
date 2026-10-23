@@ -250,12 +250,15 @@ func TestJSONTypeName(t *testing.T) {
 	}
 }
 
-// fakeGH creates an issue without running anything.
+// fakeGH creates an issue in a private repo without running anything.
 type fakeGH struct{}
 
 func (fakeGH) Run(_ context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
-	if name == "gh" && args[0] == "issue" {
+	switch {
+	case name == "gh" && args[0] == "issue":
 		return []byte("https://github.com/o/n/issues/3\n"), nil
+	case name == "gh" && args[0] == "repo":
+		return []byte(`{"visibility":"PRIVATE"}` + "\n"), nil
 	}
 	return nil, nil
 }
