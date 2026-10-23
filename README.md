@@ -16,14 +16,14 @@ aside saves it with its git context (repo, branch, commit). In **Claude Code**
 and **Codex** it also blocks the prompt, so the model never sees it and the
 work in front of you keeps going. That is the don't-disrupt-my-flow feature.
 
-In **Cursor** the same line stays in the chat, so the model still sees it. The
-hook can still save the jot, and the skill can still route the request.
-Don't-disrupt-my-flow is a Claude Code and Codex feature
-([why](docs/cursor.md)).
+**Cursor isn't supported.** Cursor keeps a blocked prompt in the chat and sends
+it to the model with your next message, so a `>>` jot there still reaches the
+model ([why](docs/cursor.md)). In Cursor, jot from a terminal with `aside add`
+instead.
 
-![Demo: an ordinary prompt reaches Claude, a ">>" prompt is blocked and saved with its git context, Claude reads the inbox over MCP, and "aside done" clears it](docs/demo.gif)
+![Demo: a ">>" prompt is blocked and saved with its git context, Claude makes the change, "update jot 1" checks the session and closes the jot with a note, and the inbox is empty](docs/demo.gif)
 
-*Recorded with the real Claude Code CLI (v2.1.294) and aside v0.1.0.
+*Recorded with the real Claude Code CLI (v2.1.309) and aside v0.7.0.
 [`docs/demo/record.sh`](docs/demo/record.sh) re-records it.*
 
 ## Install
@@ -83,13 +83,13 @@ Prefer to edit the JSON yourself? See [docs/setup.md](docs/setup.md).
 
 ### Versions and updating
 
-`@latest` installs the newest release; pin one with a tag such as `@v0.1.0`. What changed in
+`@latest` installs the newest release; pin one with a tag such as `@v0.7.0`. What changed in
 each release is in [CHANGELOG.md](CHANGELOG.md), and `aside version` prints the
 one you have:
 
 ```
 $ aside version
-aside v0.1.0
+aside v0.7.0
 ```
 
 To update, run the same `go install …@latest` again, or `mv` the new
@@ -111,8 +111,9 @@ behaviour: [docs/setup.md](docs/setup.md).
 
 ### What aside keeps
 
-The hook sees every prompt you send, but keeps only prompts that start with
-`>> ` and some text. Anything else passes through untouched and isn't stored.
+The hook sees every prompt you send, but keeps only jots: prompts that start
+with `>>`, a space and some text (the [capture rule](docs/reference.md#capture-rules)
+has the details). Anything else passes through untouched and isn't stored.
 
 For each jot, aside saves the text, the time, the agent and session it came
 from, the folder, the git repo, branch and commit, and the session's transcript
@@ -164,7 +165,6 @@ is `aside promote`, which posts to GitHub through your `gh` login, after asking.
 | You type | What happens |
 | --- | --- |
 | `>> some thought` (in Claude Code or Codex) | Saved with the repo, branch, commit and chat; the model never sees it |
-| `>> some thought` (in Cursor) | Saved, and the skill can route it; the line stays in the chat |
 | `>> session: SUP-4821 token TTL` | Also labels the chat, so `aside find` and `aside sessions` show why it exists |
 | `aside add some thought` (in a terminal) | Saved with the git context of the current directory |
 
@@ -322,6 +322,7 @@ aside, so the skill matches the binary.
 | `aside promote <id> [--repo owner/name] [--with-reply] [--yes] [--dry-run]` | Turn a jot into a GitHub issue; asks first unless `--yes` |
 | `aside backup <path>` | Copy the database safely; never overwrites |
 | `aside paths` | Where the data and binary are |
+| `aside setup claude\|codex [--dry-run] [--mcp]` | Add the prompt hook to the agent's config file |
 | `aside version` | Print the version |
 | `aside hook claude\|codex\|cursor` | Hook entry point, used by the agent configs |
 | `aside mcp` | Read-only MCP server, used by the agent configs |
@@ -332,8 +333,8 @@ aside, so the skill matches the binary.
   MCP for Codex's config file, and known Claude Code and Codex behaviour.
 - [docs/reference.md](docs/reference.md): the capture rule, what happens when
   saving fails, how `find` matches, `promote` in full, and storage.
-- [docs/cursor.md](docs/cursor.md): why a Cursor jot stays in the chat, and
-  what was tested.
+- [docs/cursor.md](docs/cursor.md): why Cursor isn't supported, and what was
+  tested.
 - [docs/decisions.md](docs/decisions.md): why aside works the way it does, and
   what's left out on purpose.
 - [AGENTS.md](AGENTS.md): building, testing and contributing.

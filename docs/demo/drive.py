@@ -13,8 +13,9 @@ import pexpect
 
 ROWS, COLS = 30, 100
 WORK = os.environ["DEMO_WORK"]
+REPO = os.environ["DEMO_REPO"]
 CLAUDE = (f"command claude --setting-sources local --settings {WORK}/settings.json "
-          f"--strict-mcp-config --mcp-config {WORK}/mcp.json")
+          f"--strict-mcp-config --mcp-config {WORK}/mcp.json --plugin-dir {REPO}")
 TITLE = r"\033[1maside\033[0m \342\200\224 a side channel for thoughts while you work with coding agents\n\n"
 
 # Terminal queries Claude Code sends at startup, with the replies a terminal
@@ -80,6 +81,20 @@ def idle(quiet=2.5, limit=120):
             return
 
 
+def turn_done(gone=4.0, limit=240):
+    """Wait for Claude's turn to finish: its "esc to interrupt" hint is shown
+    while it works, including silent thinking, and gone once it's done."""
+    wait_for(rb"interrupt", timeout=30)
+    end = time.time() + limit
+    last = time.time()
+    while time.time() < end:
+        if b"interrupt" in read(0.2):
+            last = time.time()
+        elif time.time() - last >= gone:
+            return
+    raise TimeoutError("turn")
+
+
 def pause(t):
     end = time.time() + t
     while time.time() < end:
@@ -127,31 +142,40 @@ wait_for(rb"effort")
 idle(quiet=1.5, limit=20)
 pause(0.5)
 
-typed("In one sentence, what does this repo do?")
-pause(0.4)
-enter()
-idle(quiet=3.0)
-pause(1.0)
-
-typed(">> token cache TTL looks too long, check with infra before shipping")
+typed(">> lower the token cache TTL to 1 hour")
 pause(0.6)
 enter()
 wait_for(rb"Jotted", timeout=30)
+# Scripted sessions on Claude Code 2.1.301+ put the jot back in the input box
+# (#130); clear it so the next prompt isn't appended to it.
+pause(0.3)
+p.send("\x15")
 idle(quiet=1.5, limit=10)
 pause(2.0)
 
-typed("what's in my jot inbox?")
+typed("set tokenTTL in cache.go to 1 hour")
 pause(0.4)
 enter()
-idle(quiet=3.0)
+turn_done()
+pause(1.5)
+
+typed("update jot 1")
+pause(0.4)
+enter()
+turn_done()
 pause(2.5)
+
+typed("yes, run it")
+pause(0.4)
+enter()
+turn_done()
+pause(2.0)
 
 quit_claude()
 pause(1.0)
 
 for cmd, wait in [("aside inbox", 2.5),
-                  ('aside done 1 --note "raised with infra"', 2.0),
-                  ("aside inbox", 2.5)]:
+                  ("aside search token", 3.0)]:
     typed(cmd)
     pause(0.3)
     enter()

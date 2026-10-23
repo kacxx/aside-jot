@@ -35,7 +35,7 @@ except OSError:
     pass
 settings = {
     "env": user.get("env", {}),
-    "permissions": {"allow": ["mcp__aside"]},
+    "permissions": {"allow": ["mcp__aside", "Edit", f"Bash({work}/bin/aside done *)"]},
     "hooks": {"UserPromptSubmit": [{"hooks": [
         {"type": "command", "command": f"{work}/bin/aside hook claude"}]}]},
 }
@@ -53,9 +53,25 @@ fi
 
 export JOT_DB="$work/demo.db"
 export DEMO_WORK="$work"
+export DEMO_REPO="$repo"
 "$work/venv/bin/python" "$here/drive.py" --trust
 asciinema rec --overwrite --quiet --window-size 100x30 \
   -c "$work/venv/bin/python $here/drive.py" "$work/demo.cast" > /dev/null
+# Claude Code's banner names the API provider after the model ("Opus 5.5 ·
+# <provider>"); keep that account detail out of the GIF.
+python3 - "$work/demo.cast" <<'EOF'
+import json, re, sys
+path = sys.argv[1]
+lines = open(path).read().splitlines()
+provider = re.compile(r"\x1b\[\d+G·(?:\x1b\[\d+G[^\x1b\r\n]+)+(?=\r)")
+for i, line in enumerate(lines[1:], 1):
+    ev = json.loads(line)
+    if ev[1] == "o" and "Code\x1b" in ev[2] and provider.search(ev[2]):
+        ev[2] = provider.sub("", ev[2], count=1)
+        lines[i] = json.dumps(ev, ensure_ascii=False)
+        break
+open(path, "w").write("\n".join(lines) + "\n")
+EOF
 agg --theme monokai --speed 1.6 --idle-time-limit 1.5 --last-frame-duration 5 \
   "$work/demo.cast" "$repo/docs/demo.gif" > /dev/null 2>&1
 
