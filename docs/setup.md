@@ -105,8 +105,8 @@ changed an existing hook's command. That "may" is deliberate: I haven't
 confirmed in the Codex CLI that a changed command always needs re-trusting.
 
 Setting up Claude Code also turns the hook on in Cursor, which imports it
-([docs/cursor.md](cursor.md)). The command prints that note before it writes.
-No setting to stop Cursor importing it is known, so none is suggested.
+([docs/cursor.md](cursor.md)). The command prints the result first, then that
+note. No setting to stop Cursor importing it is known, so none is suggested.
 
 Checked on Linux (Go 1.25) with throwaway configs, in the unit tests and in
 `test/e2e/run.sh`. Not yet checked by hand on macOS or Windows, and Codex's

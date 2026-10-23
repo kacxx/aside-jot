@@ -53,7 +53,7 @@ func TestSetupClaude(t *testing.T) {
 			t.Errorf("dry run output lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Index(out, "Dry run") > strings.Index(out, "Cursor imports hooks") {
+	if strings.Index(out, "Dry run") < 0 || strings.Index(out, "Dry run") > strings.Index(out, "Cursor imports hooks") {
 		t.Errorf("dry run should lead with the result, before the Cursor note:\n%s", out)
 	}
 
