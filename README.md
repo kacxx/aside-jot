@@ -21,7 +21,7 @@ it to the model with your next message, so a `>>` jot there still reaches the
 model ([why](docs/cursor.md)). In Cursor, jot from a terminal with `aside add`
 instead.
 
-![Demo: a ">>" prompt is blocked and saved with its git context, Claude makes the change, "update jot 1" checks the session and closes the jot with a note, and the inbox is empty](docs/demo.gif)
+![Demo: a ">>" prompt is blocked and saved with its git context, Claude makes the change, "update jot 1" checks the session and closes the jot with a note, and the inbox still holds the other jot](docs/demo.gif)
 
 *Recorded with the real Claude Code CLI (v2.1.309) and aside v0.7.0.
 [`docs/demo/record.sh`](docs/demo/record.sh) re-records it.*

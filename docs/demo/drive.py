@@ -142,16 +142,21 @@ wait_for(rb"effort")
 idle(quiet=1.5, limit=20)
 pause(0.5)
 
-typed(">> lower the token cache TTL to 1 hour")
-pause(0.6)
-enter()
-wait_for(rb"Jotted", timeout=30)
-# Scripted sessions on Claude Code 2.1.301+ put the jot back in the input box
-# (#130); clear it so the next prompt isn't appended to it.
-pause(0.3)
-p.send("\x15")
-idle(quiet=1.5, limit=10)
-pause(2.0)
+def jot(text):
+    typed(text)
+    pause(0.6)
+    enter()
+    wait_for(rb"Jotted", timeout=30)
+    # Scripted sessions on Claude Code 2.1.301+ put the jot back in the input
+    # box (#130); clear it so the next prompt isn't appended to it.
+    pause(0.3)
+    p.send("\x15")
+    idle(quiet=1.5, limit=10)
+    pause(2.0)
+
+
+jot(">> lower the token cache TTL to 1 hour")
+jot(">> ask infra whether tenants can override the TTL")
 
 typed("set tokenTTL in cache.go to 1 hour")
 pause(0.4)
