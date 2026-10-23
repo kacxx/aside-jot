@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -262,6 +263,7 @@ func TestPromoteFailuresLeaveJotUnchanged(t *testing.T) {
 		{"bad --repo", repoInfo, PromoteRequest{ID: 1, Repo: "nope"}, &fakeRunner{}, `invalid --repo "nope"`},
 		{"--repo looks like a flag", repoInfo, PromoteRequest{ID: 1, Repo: "--help/y"}, &fakeRunner{}, `invalid --repo "--help/y"`},
 		{"--repo part looks like a flag", repoInfo, PromoteRequest{ID: 1, Repo: "o/-x"}, &fakeRunner{}, `invalid --repo "o/-x"`},
+		{"--repo has an escape", repoInfo, PromoteRequest{ID: 1, Repo: "o/n\x1b[2J"}, &fakeRunner{}, `invalid --repo "o/n\x1b[2J"`},
 		{"gh missing", repoInfo, PromoteRequest{ID: 1, Repo: "o/n"}, &fakeRunner{auth: notFound}, "gh (GitHub CLI) not found"},
 		{"gh logged out", repoInfo, PromoteRequest{ID: 1, Repo: "o/n"},
 			&fakeRunner{auth: errors.New("exit status 1: You are not logged into any GitHub hosts")}, "gh is not logged in to github.com; run 'gh auth login'"},
@@ -339,6 +341,48 @@ func TestPromoteWithReply(t *testing.T) {
 	p, err = svc.Promote(ctx, f, PromoteRequest{ID: 2, DryRun: true})
 	if err != nil || strings.Contains(p.Body, "Agent reply") {
 		t.Fatalf("no flag: %q, %v", p.Body, err)
+	}
+}
+
+func TestPromoteRemovesTerminalEscapes(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	svc := promoteService(t, repoInfo)
+	if _, err := svc.Capture(ctx, CaptureRequest{Text: "fix \x1b]0;pwned\x07the\rbug\nwith\tdetails", Source: "claude",
+		Metadata: map[string]any{"transcript_path": path}}); err != nil {
+		t.Fatal(err)
+	}
+	reply := "visible\x1b[2K\r\x1b[1Ahidden\nsee \x1b]8;;https://evil.example\x1b\\the docs\x1b]8;;\x1b\\\n\tindented"
+	rec, _ := json.Marshal(map[string]any{"type": "assistant", "timestamp": "2026-09-30T11:59:00Z",
+		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": reply}}}})
+	if err := os.WriteFile(path, append(rec, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const wantTitle = "fix the bug"
+	const wantBody = "fix the bug\nwith\tdetails\n\n## Agent reply\n\nvisible hidden\nsee the docs\n\tindented\n\nCaptured "
+
+	f := &fakeRunner{remote: "git@github.com:o/n.git", url: "https://github.com/o/n/issues/1"}
+	p, err := svc.Promote(ctx, f, PromoteRequest{ID: 2, DryRun: true, WithReply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != wantTitle || !strings.HasPrefix(p.Body, wantBody) {
+		t.Fatalf("dry run:\ntitle %q\nbody  %q", p.Title, p.Body)
+	}
+
+	// What Confirm is shown is what gh is given, and neither has escapes.
+	var shown Promotion
+	p, err = svc.Promote(ctx, f, PromoteRequest{ID: 2, WithReply: true, Confirm: func(p Promotion) error { shown = p; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	posted := f.stdin[len(f.stdin)-1]
+	if shown.Title != wantTitle || !strings.HasPrefix(shown.Body, wantBody) || posted != shown.Body ||
+		!strings.Contains(f.calls[len(f.calls)-1], "--title="+wantTitle+" ") {
+		t.Fatalf("shown %+v\nposted %q\ncall %q", shown, posted, f.calls[len(f.calls)-1])
+	}
+	if strings.ContainsAny(posted, "\x1b\r\a") {
+		t.Fatalf("posted body has control characters: %q", posted)
 	}
 }
 

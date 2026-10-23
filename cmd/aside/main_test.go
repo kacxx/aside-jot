@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -312,11 +313,16 @@ func TestPathWarning(t *testing.T) {
 }
 
 // ghFake stands in for git and gh: no real GitHub calls.
-type ghFake struct{ calls []string }
+type ghFake struct {
+	calls  []string
+	bodies []string // the body of each issue created
+}
 
-func (f *ghFake) Run(_ context.Context, _ io.Reader, name string, args ...string) ([]byte, error) {
+func (f *ghFake) Run(_ context.Context, stdin io.Reader, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
 	if name == "gh" && args[0] == "issue" {
+		b, _ := io.ReadAll(stdin)
+		f.bodies = append(f.bodies, string(b))
 		return []byte("https://github.com/o/n/issues/7\n"), nil
 	}
 	return nil, nil
@@ -711,6 +717,85 @@ func TestActivityCLI(t *testing.T) {
 	}
 	if _, err := aside("activity", "99"); err == nil || !strings.Contains(err.Error(), "no jot #99") {
 		t.Fatalf("activity of a missing jot: %v", err)
+	}
+}
+
+// TestTranscriptEscapesCLI checks that transcript text with terminal escapes
+// reaches neither the terminal (activity, the promote preview) nor GitHub.
+func TestTranscriptEscapesCLI(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("JOT_DB", filepath.Join(t.TempDir(), "jot.db"))
+	setTerminal(t, true)
+	prompt := capturePrompt(t)
+	f := &ghFake{}
+	old := promoteRunner
+	promoteRunner = f
+	t.Cleanup(func() { promoteRunner = old })
+
+	const evil = "visible\x1b[2K\r\x1b[1Ahidden\nsee \x1b]8;;https://evil.example\x1b\\the docs\x1b]8;;\x1b\\ \x1b]0;pwned\x07\n\tdone\rnow"
+	const clean = "visible hidden\nsee the docs \n\tdone now"
+	later := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	var lines []byte
+	for _, rec := range []map[string]any{
+		{"type": "assistant", "timestamp": "2020-01-01T00:00:00Z", "message": map[string]any{"role": "assistant",
+			"content": []map[string]string{{"type": "text", "text": "before: " + evil}}}},
+		{"type": "user", "timestamp": later, "message": map[string]any{"role": "user", "content": "after: " + evil}},
+		{"type": "assistant", "timestamp": later, "message": map[string]any{"role": "assistant",
+			"content": []map[string]string{{"type": "text", "text": "reply: " + evil}}}},
+	} {
+		b, _ := json.Marshal(rec)
+		lines = append(append(lines, b...), '\n')
+	}
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	if err := os.WriteFile(transcript, lines, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := app.OpenDefault()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Capture(ctx, app.CaptureRequest{Text: "fix \x1b[31mit\x1b[0m\rnow", Source: "claude",
+		Metadata: map[string]any{"transcript_path": transcript}}); err != nil {
+		t.Fatal(err)
+	}
+	svc.Close()
+	aside := func(stdin string, args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := run(args, strings.NewReader(stdin), &out); err != nil {
+			t.Fatalf("aside %v: %v", args, err)
+		}
+		return out.String()
+	}
+	noControls := func(what, s string) {
+		t.Helper()
+		if strings.ContainsAny(s, "\x1b\r\a\u009b") {
+			t.Errorf("%s has control characters: %q", what, s)
+		}
+	}
+
+	out := aside("", "activity", "1")
+	noControls("activity", out)
+	for _, want := range []string{"you: after: " + clean, "agent: reply: " + clean} {
+		if !strings.Contains(out, want) {
+			t.Errorf("activity lacks %q:\n%q", want, out)
+		}
+	}
+
+	out = aside("", "promote", "1", "--repo", "o/n", "--with-reply", "--dry-run")
+	noControls("dry run", out)
+	if !strings.HasPrefix(out, "repo:  o/n\ntitle: fix it now\n\nfix it now\n\n## Agent reply\n\nbefore: "+clean+"\n\nCaptured ") {
+		t.Errorf("dry run:\n%q", out)
+	}
+
+	prompt.Reset()
+	aside("y\n", "promote", "1", "--repo", "o/n", "--with-reply")
+	noControls("preview", prompt.String())
+	if !strings.Contains(prompt.String(), "title: fix it now\n\nfix it now\n\n## Agent reply\n\nbefore: "+clean+"\n\nCaptured ") {
+		t.Errorf("preview:\n%q", prompt.String())
+	}
+	if len(f.bodies) != 1 || !strings.Contains(prompt.String(), f.bodies[0]) {
+		t.Errorf("posted %q, previewed %q", f.bodies, prompt.String())
 	}
 }
 

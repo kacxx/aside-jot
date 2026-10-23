@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/kacxx/aside-jot/internal/store"
 )
@@ -171,9 +172,12 @@ func issueURL(out []byte) string {
 	return ""
 }
 
-// IssueTitle is the jot's first line, trimmed.
+// IssueTitle is the jot's first line, trimmed. A jot's text comes from a hook
+// payload or stdin and can hold terminal escapes or control characters, so,
+// like the body, it is cleaned: the preview shows exactly what is posted, and
+// neither can rewrite the terminal it is shown on.
 func IssueTitle(e Entry) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
+	line, _, _ := strings.Cut(strings.TrimSpace(cleanText(e.Text)), "\n")
 	return strings.TrimSpace(line)
 }
 
@@ -182,7 +186,8 @@ func IssueTitle(e Entry) string {
 func IssueBody(e Entry) string { return issueBody(e, "") }
 
 // issueBody is IssueBody with, if reply is not empty, the agent's reply under
-// its own heading between the jot and the footer.
+// its own heading between the jot and the footer. The whole body is cleaned
+// as IssueTitle is.
 func issueBody(e Entry, reply string) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(e.Text))
@@ -205,7 +210,7 @@ func issueBody(e Entry, reply string) string {
 		}
 	}
 	b.WriteString("\n")
-	return b.String()
+	return cleanText(b.String())
 }
 
 // ParseRemote turns a git remote URL into the repo form gh's --repo takes:
@@ -274,7 +279,7 @@ func validRepo(repo string) bool {
 	}
 	for _, p := range parts {
 		// A leading "-" would read as a flag to gh or git.
-		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \t\r\n\\@") {
+		if p == "" || strings.HasPrefix(p, "-") || strings.ContainsAny(p, " \\@") || strings.IndexFunc(p, unicode.IsControl) >= 0 {
 			return false
 		}
 	}
