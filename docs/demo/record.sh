@@ -20,6 +20,7 @@ cd "$work/api"
 git init -q -b main
 printf '# api\n\nToken service: issues short-lived auth tokens and caches them per tenant.\n' > README.md
 printf 'package api\n\nimport "time"\n\n// tokenTTL is how long an issued token stays in the cache.\nconst tokenTTL = 24 * time.Hour\n' > cache.go
+printf 'module api\n\ngo 1.25.0\n' > go.mod
 git add .
 git -c user.name=demo -c user.email=demo@example.com commit -qm "token cache"
 
@@ -35,7 +36,16 @@ except OSError:
     pass
 settings = {
     "env": user.get("env", {}),
-    "permissions": {"allow": ["mcp__aside", "Edit", f"Bash({work}/bin/aside done *)"]},
+    # Edit is the TTL change, only inside the throwaway tree (macOS reports
+    # it as /private/tmp). aside done is the only shell command. Anything
+    # else has to ask, and the driver treats a permission prompt as a failed take.
+    "permissions": {"allow": [
+        "mcp__aside",
+        f"Edit({work}/api/**)",
+        f"Edit(/private{work}/api/**)",
+        f"Bash({work}/bin/aside done *)",
+        f"Bash(/private{work}/bin/aside done *)",
+    ]},
     "hooks": {"UserPromptSubmit": [{"hooks": [
         {"type": "command", "command": f"{work}/bin/aside hook claude"}]}]},
 }
@@ -57,6 +67,12 @@ export DEMO_REPO="$repo"
 "$work/venv/bin/python" "$here/drive.py" --trust
 asciinema rec --overwrite --quiet --window-size 100x30 \
   -c "$work/venv/bin/python $here/drive.py" "$work/demo.cast" > /dev/null
+# asciinema exits 0 even when the driver raises. A failed take stops here,
+# before agg replaces the gif.
+if grep -q -e Traceback -e TimeoutError -e "demo:" "$work/demo.cast"; then
+  echo "demo driver failed; leaving docs/demo.gif unchanged" >&2
+  exit 1
+fi
 # Claude Code's banner names the API provider after the model ("Opus 5.5 ·
 # <provider>"); keep that account detail out of the GIF.
 python3 - "$work/demo.cast" <<'EOF'
@@ -64,12 +80,32 @@ import json, re, sys
 path = sys.argv[1]
 lines = open(path).read().splitlines()
 provider = re.compile(r"\x1b\[\d+G·(?:\x1b\[\d+G[^\x1b\r\n]+)+(?=\r)")
+# Ctrl-U (clearing the replayed jot) draws this in the status bar. Blank it
+# in place so the column layout of that redraw stays intact.
+paste_hint = "Ctrl+Y to paste deleted text"
+resume = re.compile(r"(?:Press Ctrl-D again to exit|Resume this session with:)\r*\n(?:claude --resume \S+\r*\n)?")
+removed = 0
 for i, line in enumerate(lines[1:], 1):
     ev = json.loads(line)
-    if ev[1] == "o" and "Code\x1b" in ev[2] and provider.search(ev[2]):
-        ev[2] = provider.sub("", ev[2], count=1)
+    if ev[1] != "o":
+        continue
+    text = ev[2]
+    changed = False
+    if provider.search(text):
+        text, n = provider.subn("", text)
+        removed += n
+        changed = n > 0
+    if paste_hint in text:
+        text = text.replace(paste_hint, " " * len(paste_hint))
+        changed = True
+    if resume.search(text):
+        text = resume.sub("", text)
+        changed = True
+    if changed:
+        ev[2] = text
         lines[i] = json.dumps(ev, ensure_ascii=False)
-        break
+if removed == 0:
+    sys.exit("demo: provider name was not removed from the banner; not writing the gif")
 open(path, "w").write("\n".join(lines) + "\n")
 EOF
 agg --theme monokai --speed 1.6 --idle-time-limit 1.5 --last-frame-duration 5 \
