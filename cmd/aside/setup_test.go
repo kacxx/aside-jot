@@ -68,7 +68,7 @@ func TestSetupClaude(t *testing.T) {
 	if !strings.Contains(out, "Added") || !strings.Contains(out, ">> test") || !strings.Contains(out, "Cursor imports hooks") {
 		t.Errorf("output:\n%s", out)
 	}
-	if strings.Index(out, "✓ Added") > strings.Index(out, "Cursor imports hooks") {
+	if strings.Index(out, "✓ Added") < 0 || strings.Index(out, "✓ Added") > strings.Index(out, "Cursor imports hooks") {
 		t.Errorf("checkmark should lead, before the Cursor note:\n%s", out)
 	}
 	if strings.Contains(out, "claude mcp add") {
