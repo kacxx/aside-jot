@@ -37,9 +37,12 @@ aside setup claude    # or: aside setup codex
 
 Without Go, download the archive for your system from the
 [latest release](https://github.com/kacxx/aside-jot/releases/latest)
-(macOS, Linux and Windows, amd64 and arm64). Put `aside` somewhere it will
-stay, such as `~/.local/bin`, then run setup from there, because setup records
-the path it was run from. For example, on Apple Silicon:
+(macOS, Linux and Windows, amd64 and arm64). The files are
+`aside_*_darwin_arm64.tar.gz`, `aside_*_darwin_amd64.tar.gz`,
+`aside_*_linux_arm64.tar.gz`, `aside_*_linux_amd64.tar.gz`,
+`aside_*_windows_arm64.zip` and `aside_*_windows_amd64.zip`. Put `aside`
+somewhere it will stay, such as `~/.local/bin`, then run setup from there,
+because setup records the path it was run from. On Apple Silicon:
 
 ```sh
 shasum -a 256 -c checksums.txt --ignore-missing    # if you downloaded checksums.txt too
@@ -48,32 +51,55 @@ mkdir -p ~/.local/bin && mv aside ~/.local/bin/
 ~/.local/bin/aside setup claude    # or: setup codex
 ```
 
-`~/.local/bin` isn't on `PATH` by default on macOS; add
-`export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` to run plain `aside`.
+On Linux the archive name changes and the rest is the same. On arm64 (use
+`aside_*_linux_amd64.tar.gz` on x86_64):
+
+```sh
+sha256sum -c checksums.txt --ignore-missing    # if you downloaded checksums.txt too
+tar -xzf aside_*_linux_arm64.tar.gz aside
+mkdir -p ~/.local/bin && mv aside ~/.local/bin/
+~/.local/bin/aside setup claude    # or: setup codex
+```
+
+`~/.local/bin` isn't on `PATH` in a new shell. Add
+`export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` on macOS, or to
+`~/.bashrc` on Linux, and open a new shell to run plain `aside`.
 
 The binaries aren't signed. On macOS, a file downloaded in a browser is marked
 as quarantined, extracting it keeps the mark, and Gatekeeper may refuse to run
 it; clear it with `xattr -d com.apple.quarantine ~/.local/bin/aside`. Downloads
 with `curl` or `gh release download` aren't marked. On Windows, unzip
-`aside.exe` to a folder where it will stay and run `.\aside.exe setup claude`
-from there in PowerShell.
+`aside_*_windows_amd64.zip` (or `aside_*_windows_arm64.zip`) and put
+`aside.exe` in a folder where it will stay, then run
+`.\aside.exe setup claude` from there in PowerShell.
 
 `aside setup` adds the `UserPromptSubmit` hook to `~/.claude/settings.json`
 (or `~/.codex/hooks.json`) with the binary's absolute path, since editors often
-run hooks with a minimal `PATH`. It keeps your other settings and hooks, backs
-the file up first (`settings.json.bak-<time>`), and replaces an older aside
-entry instead of adding a second. `--dry-run` shows the result and writes
-nothing; `--mcp` also prints the command that gives the agent read-only access
-to your jots (it doesn't run it). If `aside` isn't on your `PATH` yet, run it by
-its full path: `"$(go env GOPATH)/bin/aside" setup claude` after `go install`,
-or `~/.local/bin/aside setup claude` for a downloaded binary.
+run hooks with a minimal `PATH`. It keeps your other settings and hooks, and
+replaces an older aside entry instead of adding a second. When that file
+already exists, setup copies it to `<file>.bak-<time>` first. When it does not
+exist yet, the backup line says `none needed, the file did not exist`.
+`--dry-run` shows the result and writes nothing; `--mcp` also prints the
+command that gives the agent read-only access to your jots (it doesn't run
+it). If `aside` isn't on your `PATH` yet, run it by its full path:
+`"$(go env GOPATH)/bin/aside" setup claude` after `go install`, or
+`~/.local/bin/aside setup claude` for a downloaded binary.
+
+A first install, where the config file is new, prints the checkmark and then
+a note that Cursor imports the same file:
 
 ```
 $ aside setup claude
 ✓ Added the aside hook in /Users/you/.claude/settings.json
-  command: /Users/you/go/bin/aside hook claude
-  backup:  /Users/you/.claude/settings.json.bak-20261006-065359
-  …
+  command: /Users/you/.local/bin/aside hook claude
+  backup:  none needed, the file did not exist
+  Other settings and key order are kept; only whitespace may differ.
+
+Note: Cursor imports hooks from ~/.claude/settings.json, so this also turns aside on in
+Cursor, which isn't supported (see https://github.com/kacxx/aside-jot/blob/main/docs/cursor.md).
+Use --dry-run to preview without writing.
+
+Next: type `>> test` in Claude Code: you should see ✓ Jotted #N and no model reply.
 ```
 
 For **Codex**, run `/hooks` in the **Codex CLI** afterwards and **trust** the
@@ -101,10 +127,12 @@ agent restarts, so restart Claude Desktop, Codex and any open agent sessions.
 
 ### Check it works
 
-Type `>> test` in the agent. You should see `✓ Jotted #N` and no reply from
-the model. Then run `aside inbox` in a terminal. If your shell can't find
-`aside`, add `$(go env GOPATH)/bin` (after `go install`) or the folder you put
-the downloaded binary in to your `PATH`.
+Type `>> test` in the agent. In Claude Code you should see
+`UserPromptSubmit operation blocked by hook` above `✓ Jotted #N`, and no reply
+from the model. That blocked line is Claude reporting that the hook stopped
+the prompt; `✓ Jotted` means the jot was saved. Then run `aside inbox` in a
+terminal. If your shell can't find `aside`, add `$(go env GOPATH)/bin` (after
+`go install`) or the folder you put the downloaded binary in to your `PATH`.
 
 Windows paths, project-level configs, Codex trust details and known agent
 behaviour: [docs/setup.md](docs/setup.md).

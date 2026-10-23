@@ -86,14 +86,6 @@ func agentName(agent string) string {
 func printSetup(w io.Writer, agent string, h setup.Hook, res setup.Result, dry bool) {
 	ch := res.Change
 	name := agentName(agent)
-	if agent == "claude" && ch.Kind != "unchanged" {
-		// Before the result, so it is read before the file is trusted as done.
-		fmt.Fprintf(w, "Note: Cursor imports hooks from ~/.claude/settings.json, so this also turns aside on in\nCursor, which isn't supported (see %s).\n", cursorDocs)
-		if !dry {
-			fmt.Fprintln(w, "Use --dry-run to preview without writing.")
-		}
-		fmt.Fprintln(w)
-	}
 	switch {
 	case ch.Kind == "unchanged":
 		fmt.Fprintf(w, "✓ %s already has this hook; nothing changed.\n  command: %s\n", res.Path, h.Command)
@@ -126,6 +118,14 @@ func printSetup(w io.Writer, agent string, h setup.Hook, res setup.Result, dry b
 		// tokens, and this output can end up in an agent's context.
 		if sec, err := setup.Section(res.New); err == nil {
 			fmt.Fprintf(w, "\nResulting hooks.UserPromptSubmit (the rest of the file is unchanged and not shown):\n%s", sec)
+		}
+	}
+	if agent == "claude" && ch.Kind != "unchanged" {
+		// After the result, so a successful setup leads with the checkmark.
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Note: Cursor imports hooks from ~/.claude/settings.json, so this also turns aside on in\nCursor, which isn't supported (see %s).\n", cursorDocs)
+		if !dry {
+			fmt.Fprintln(w, "Use --dry-run to preview without writing.")
 		}
 	}
 
