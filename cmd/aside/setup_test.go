@@ -53,6 +53,9 @@ func TestSetupClaude(t *testing.T) {
 			t.Errorf("dry run output lacks %q:\n%s", want, out)
 		}
 	}
+	if !strings.Contains(out, "Dry run") || strings.Index(out, "Dry run") > strings.Index(out, "Cursor imports hooks") {
+		t.Errorf("dry run should lead with the result, before the Cursor note:\n%s", out)
+	}
 
 	out, err = runSetup(t, "claude")
 	if err != nil {
@@ -64,6 +67,9 @@ func TestSetupClaude(t *testing.T) {
 	}
 	if !strings.Contains(out, "Added") || !strings.Contains(out, ">> test") || !strings.Contains(out, "Cursor imports hooks") {
 		t.Errorf("output:\n%s", out)
+	}
+	if !strings.Contains(out, "✓ Added") || strings.Index(out, "✓ Added") > strings.Index(out, "Cursor imports hooks") {
+		t.Errorf("checkmark should lead, before the Cursor note:\n%s", out)
 	}
 	if strings.Contains(out, "claude mcp add") {
 		t.Errorf("printed the MCP command without --mcp:\n%s", out)
